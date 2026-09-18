@@ -481,7 +481,14 @@ func (d *Driver) activate(ctx context.Context, s *Scene) error {
 	// off-screen at StartY=2000. Built-ins don't count against the
 	// per-Type Text cap (6) and don't trigger network fetches.
 	prevLen := int(d.lastDispListLen.Load())
-	if prevLen == len(elements) {
+	// prevLen == 0 means this is the daemon's first install since it
+	// started -- but the device's own cache persists across daemon
+	// restarts (it's device-side state, not ours), so we have no idea
+	// whether this length matches what's already cached there. Force
+	// the filler unconditionally on the first install so every daemon
+	// startup gets a clean slate instead of possibly inheriting stale
+	// per-slot properties from whatever the device last had installed.
+	if prevLen == 0 || prevLen == len(elements) {
 		elements = append(elements, cacheFiller())
 	}
 	d.lastDispListLen.Store(int64(len(elements)))

@@ -223,7 +223,7 @@ func SceneBackground(scene Scene, format Format, now time.Time) ([]byte, error) 
 		drawSceneGlyph(img, scene)
 		drawBakedSceneTitle(img, "next up")
 	case SceneHomeAssistant:
-		drawBakedSceneTitle(img, "home overview")
+		// No baked title -- the scene content starts right under the header.
 	case SceneSeismic:
 		// No corner glyph — the seismograph trace fought the commentary
 		// line for the bottom-right quadrant and carried no data of its
@@ -340,7 +340,6 @@ func SceneWeatherBackground(outlook string, format Format, now time.Time) ([]byt
 // per activation based on the widget's icon field.
 func SceneHomeAssistantBackground(icon string, format Format, now time.Time) ([]byte, error) {
 	img := buildHeroImage(now)
-	drawBakedSceneTitle(img, "home overview")
 	switch icon {
 	case "rain":
 		drawRainCloud(img, 660, 550)
