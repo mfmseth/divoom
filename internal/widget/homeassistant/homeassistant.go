@@ -1,8 +1,10 @@
 // Package homeassistant queries a Home Assistant instance's REST API,
 // grouped by area (Upstairs / Downstairs / Bedroom), and emits a
-// pipe-separated "<presence>|<upstairs>|<downstairs>|<bedroom>" string
-// for the homeassistant scene — each area field already combines that
-// area's climate, occupancy, and lights-on state into one line.
+// pipe-separated
+// "<weather text>|<icon>|<presence>|<upstairs>|<downstairs>|<bedroom>"
+// string for the homeassistant scene — each area field already combines
+// that area's climate, occupancy, and lights-on state into one line, and
+// icon is "rain", "snow", or "" depending on today's forecast.
 package homeassistant
 
 import (
@@ -36,6 +38,7 @@ type Client struct {
 	http    *http.Client
 
 	presenceEntity string
+	weatherEntity  string
 	areas          []area
 }
 
@@ -50,6 +53,7 @@ func New(baseURL, token string) *Client {
 		token:          token,
 		http:           &http.Client{Timeout: 10 * time.Second},
 		presenceEntity: "group.home_presence",
+		weatherEntity:  "weather.forecast_home",
 		areas: []area{
 			{
 				name:      "Upstairs",
@@ -112,13 +116,14 @@ func (c *Client) getState(ctx context.Context, entityID string) (*haState, error
 }
 
 // Fetch queries all configured entities in parallel and folds them into
-// "<presence>|<upstairs>|<downstairs>|<bedroom>", each area field already
-// formatted as "AREA · temp° [· OCCUPIED] [· LIGHTS ON]". A failed
-// individual lookup degrades that one piece rather than failing the
-// whole scene — a single down entity shouldn't blank the whole card.
+// "<weather>|<icon>|<presence>|<upstairs>|<downstairs>|<bedroom>", each
+// area field already formatted as "AREA · temp° [· OCCUPIED] [· LIGHTS
+// ON]". A failed individual lookup degrades that one piece rather than
+// failing the whole scene — a single down entity shouldn't blank the
+// whole card.
 func (c *Client) Fetch(ctx context.Context) (string, error) {
 	var wg sync.WaitGroup
-	var presence string
+	var presence, weatherText, icon string
 	areaText := make([]string, len(c.areas))
 
 	wg.Add(1)
@@ -136,6 +141,12 @@ func (c *Client) Fetch(ctx context.Context) (string, error) {
 		}
 	}()
 
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		weatherText, icon = c.fetchWeather(ctx)
+	}()
+
 	for i, a := range c.areas {
 		i, a := i, a
 		wg.Add(1)
@@ -147,7 +158,90 @@ func (c *Client) Fetch(ctx context.Context) (string, error) {
 
 	wg.Wait()
 
-	return presence + "|" + strings.Join(areaText, "|"), nil
+	return weatherText + "|" + icon + "|" + presence + "|" + strings.Join(areaText, "|"), nil
+}
+
+// forecastDay is the one field we need out of weather.get_forecasts'
+// daily response.
+type forecastDay struct {
+	Condition string `json:"condition"`
+}
+
+// fetchWeather returns "<CONDITION> <temp>°" from the weather entity's
+// current state, and an icon hint ("rain", "snow", or "") derived from
+// today's daily forecast condition — not the current condition, since a
+// clear-now-rain-later day should still show the icon.
+func (c *Client) fetchWeather(ctx context.Context) (text, icon string) {
+	s, err := c.getState(ctx, c.weatherEntity)
+	if err != nil || s == nil {
+		return "WEATHER · —", ""
+	}
+	temp := "—"
+	if t, ok := s.Attributes["temperature"].(float64); ok {
+		temp = strconv.Itoa(int(t)) + "°"
+	}
+	text = strings.ToUpper(s.State) + " · " + temp
+
+	today, err := c.fetchTodayForecast(ctx)
+	if err != nil || today == "" {
+		return text, ""
+	}
+	return text, iconFor(today)
+}
+
+// fetchTodayForecast calls the weather.get_forecasts service (REST
+// service-call endpoint, ?return_response so the forecast comes back in
+// the response body) and returns the first (today's) daily entry's
+// condition string.
+func (c *Client) fetchTodayForecast(ctx context.Context) (string, error) {
+	body := fmt.Sprintf(`{"entity_id":%q,"type":"daily"}`, c.weatherEntity)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		c.baseURL+"/api/services/weather/get_forecasts?return_response",
+		strings.NewReader(body))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("HA get_forecasts: status %d", resp.StatusCode)
+	}
+	var out struct {
+		ServiceResponse map[string]struct {
+			Forecast []forecastDay `json:"forecast"`
+		} `json:"service_response"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return "", fmt.Errorf("decode get_forecasts: %w", err)
+	}
+	fc, ok := out.ServiceResponse[c.weatherEntity]
+	if !ok || len(fc.Forecast) == 0 {
+		return "", nil
+	}
+	return fc.Forecast[0].Condition, nil
+}
+
+// iconFor maps an HA weather condition string to our icon hint. HA's
+// condition set includes "rainy", "pouring", "lightning-rainy",
+// "snowy", and "snowy-rainy" among others (see the weather integration
+// docs) — anything containing "rain"/"pour" gets the rain icon, anything
+// containing "snow" gets the snow icon (checked first since
+// "snowy-rainy" should read as snow, not rain).
+func iconFor(condition string) string {
+	c := strings.ToLower(condition)
+	switch {
+	case strings.Contains(c, "snow"):
+		return "snow"
+	case strings.Contains(c, "rain"), strings.Contains(c, "pour"):
+		return "rain"
+	default:
+		return ""
+	}
 }
 
 // fetchArea queries one area's climate, occupancy, and light group

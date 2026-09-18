@@ -15,13 +15,16 @@ import (
 // of introducing a second accent color.
 const mhAccent = cOrange
 
-// "homeassistant" — presence plus one row per area (Upstairs /
-// Downstairs / Bedroom), each row already folding that area's climate,
-// occupancy, and lights-on state into a single self-labeled line — no
-// separate section headers or divider rules needed. The widget emits
-// "<presence>|<upstairs>|<downstairs>|<bedroom>", with each area field
-// pre-formatted as "AREA · temp° [· OCCUPIED] [· LIGHTS ON]".
+// "homeassistant" — a top weather row, presence, and one row per area
+// (Upstairs / Downstairs / Bedroom), each area row already folding that
+// area's climate, occupancy, and lights-on state into a single
+// self-labeled line. The widget emits
+// "<weather>|<icon>|<presence>|<upstairs>|<downstairs>|<bedroom>", with
+// each area field pre-formatted as "AREA · temp° [· OCCUPIED] [· LIGHTS
+// ON]".
 //
+//   - Weather: "<CONDITION> · temp°", with a rain/snow cloud icon baked
+//     into the bg (via BgPathFor) when today's forecast calls for it.
 //   - Presence: HOME or AWAY, filled in an accent-orange chip when HOME.
 //   - Area rows: plain text, one per area, in the order Upstairs /
 //     Downstairs / Bedroom.
@@ -30,38 +33,55 @@ func homeAssistantScene(widgets map[string]widget.Widget) *scene.Scene {
 		Name:   "homeassistant",
 		Weight: WeightInformational,
 		BgPath: bgHomeAssistant,
+		BgPathFor: func(raw string) string {
+			switch weatherPipeField(raw, 1) {
+			case "rain":
+				return bgHomeAssistantRain
+			case "snow":
+				return bgHomeAssistantSnow
+			default:
+				return bgHomeAssistant
+			}
+		},
 		Elements: []frame.DispElement{
 			{
+				ID: idSceneSub2, Type: "Text",
+				StartX: 80, StartY: 520, Width: 500, Height: 60,
+				Align: 0, FontSize: 40, FontID: fontMono,
+				FontColor: cFg, BgColor: cBgHard,
+			},
+			{
 				ID: idSceneMain, Type: "Text",
-				StartX: 80, StartY: 520, Width: 640, Height: 190,
-				Align: 2, FontSize: 150, FontID: fontProse,
+				StartX: 80, StartY: 600, Width: 640, Height: 180,
+				Align: 2, FontSize: 140, FontID: fontProse,
 				FontColor: cFg, BgColor: cBgHard,
 			},
 			{
 				ID: idSceneSub1, Type: "Text",
-				StartX: 80, StartY: 790, Width: 640, Height: 70,
+				StartX: 80, StartY: 860, Width: 640, Height: 70,
 				Align: 0, FontSize: 38, FontID: fontMono,
 				FontColor: cFg, BgColor: cBgHard,
 			},
 			{
 				ID: idSceneSub4, Type: "Text",
-				StartX: 80, StartY: 930, Width: 640, Height: 70,
+				StartX: 80, StartY: 1000, Width: 640, Height: 70,
 				Align: 0, FontSize: 38, FontID: fontMono,
 				FontColor: cFg, BgColor: cBgHard,
 			},
 			{
 				ID: idSceneTitle, Type: "Text",
-				StartX: 80, StartY: 1070, Width: 640, Height: 70,
+				StartX: 80, StartY: 1140, Width: 640, Height: 70,
 				Align: 0, FontSize: 38, FontID: fontMono,
 				FontColor: cFg, BgColor: cBgHard,
 			},
 		},
 		Widget: widgets["homeassistant"],
 		Mounts: []scene.Mount{
+			{ID: idSceneSub2, Format: pipeAt(0)},
 			{ID: idSceneMain, Format: haPresence},
-			{ID: idSceneSub1, Format: pipeAt(1)},
-			{ID: idSceneSub4, Format: pipeAt(2)},
-			{ID: idSceneTitle, Format: pipeAt(3)},
+			{ID: idSceneSub1, Format: pipeAt(3)},
+			{ID: idSceneSub4, Format: pipeAt(4)},
+			{ID: idSceneTitle, Format: pipeAt(5)},
 		},
 		OnActivate: haChipColorize,
 	}
@@ -71,12 +91,17 @@ func homeAssistantScene(widgets map[string]widget.Widget) *scene.Scene {
 // idSceneSub1-3 pool in scenes.go.
 const idSceneSub4 = 14
 
-// bgHomeAssistant is the on-device path for this scene's background —
-// the only one that exists now that every other scene has been removed.
-const bgHomeAssistant = "/userdata/wallclock_bg_homeassistant.jpg"
+// On-device bg paths for this scene. Three variants -- plain, rain-icon,
+// snow-icon -- all pre-pushed at startup; the scene's BgPathFor picks
+// among them per activation based on the widget's icon field.
+const (
+	bgHomeAssistant     = "/userdata/wallclock_bg_homeassistant.jpg"
+	bgHomeAssistantRain = "/userdata/wallclock_bg_homeassistant_rain.jpg"
+	bgHomeAssistantSnow = "/userdata/wallclock_bg_homeassistant_snow.jpg"
+)
 
 func haPresence(raw string) (text, color string) {
-	return strings.ToUpper(weatherPipeField(raw, 0)), cFg
+	return strings.ToUpper(weatherPipeField(raw, 2)), cFg
 }
 
 // haChipColorize fills idSceneMain's BgColor with the accent when
@@ -84,7 +109,7 @@ func haPresence(raw string) (text, color string) {
 // contrast against that fill. AWAY keeps the default text-on-hero-bg
 // look set in the Elements above.
 func haChipColorize(_ time.Time, raw string, elements []frame.DispElement) {
-	presence := weatherPipeField(raw, 0)
+	presence := weatherPipeField(raw, 2)
 	if presence != "HOME" {
 		return
 	}

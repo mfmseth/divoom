@@ -87,16 +87,29 @@ func logStartup(d *scene.Driver) {
 	}
 }
 
-// pushSceneBackgrounds renders the homeassistant bg JPG and adb-pushes
-// it to the device. Done once at startup; the device references this
-// path via BackgroundImageLocalFlag: 1 in the scene layout.
+// pushSceneBackgrounds renders the homeassistant scene's three bg
+// variants (plain, rain-icon, snow-icon) and adb-pushes them to the
+// device. Done once at startup; the device references whichever path
+// the scene's BgPathFor picks via BackgroundImageLocalFlag: 1 in the
+// scene layout.
 func pushSceneBackgrounds(ctx context.Context) error {
-	data, err := render.SceneBackground(render.SceneHomeAssistant, render.FormatJPEG, time.Now())
-	if err != nil {
-		return fmt.Errorf("render %s bg: %w", bgHomeAssistant, err)
+	now := time.Now()
+	variants := []struct {
+		icon string
+		path string
+	}{
+		{"", bgHomeAssistant},
+		{"rain", bgHomeAssistantRain},
+		{"snow", bgHomeAssistantSnow},
 	}
-	if err := pushBytes(ctx, data, bgHomeAssistant); err != nil {
-		return fmt.Errorf("push %s: %w", bgHomeAssistant, err)
+	for _, v := range variants {
+		data, err := render.SceneHomeAssistantBackground(v.icon, render.FormatJPEG, now)
+		if err != nil {
+			return fmt.Errorf("render %s bg: %w", v.path, err)
+		}
+		if err := pushBytes(ctx, data, v.path); err != nil {
+			return fmt.Errorf("push %s: %w", v.path, err)
+		}
 	}
 	return nil
 }

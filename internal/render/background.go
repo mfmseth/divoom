@@ -331,6 +331,56 @@ func SceneWeatherBackground(outlook string, format Format, now time.Time) ([]byt
 	return encodeImage(img, format)
 }
 
+// SceneHomeAssistantBackground bakes the homeassistant scene's bg for a
+// given icon hint ("rain", "snow", or "" for neither) -- the "home
+// overview" title plus, when set, a small cloud glyph with rain
+// streaks or snow dots in the top-right of the weather row (y=520-580)
+// so today's forecast reads as an icon, not just text. Three variants
+// get pre-pushed at startup; the scene's BgPathFor picks among them
+// per activation based on the widget's icon field.
+func SceneHomeAssistantBackground(icon string, format Format, now time.Time) ([]byte, error) {
+	img := buildHeroImage(now)
+	drawBakedSceneTitle(img, "home overview")
+	switch icon {
+	case "rain":
+		drawRainCloud(img, 660, 550)
+	case "snow":
+		drawSnowCloud(img, 660, 550)
+	}
+	return encodeImage(img, format)
+}
+
+// drawCloudBody paints the cloud shape shared by drawRainCloud and
+// drawSnowCloud -- three overlapping circles plus a base rectangle,
+// gruvbox fg-dark so it reads as a quiet icon rather than competing
+// with the weather text to its left.
+func drawCloudBody(img *image.RGBA, cx, cy int) {
+	c := GruvFgDark
+	fillCircle(img, cx-18, cy, 14, c)
+	fillCircle(img, cx, cy-8, 18, c)
+	fillCircle(img, cx+18, cy, 14, c)
+	draw.Draw(img, image.Rect(cx-30, cy, cx+30, cy+14), &image.Uniform{c}, image.Point{}, draw.Src)
+}
+
+// drawRainCloud draws the shared cloud body plus three short vertical
+// streaks beneath it in gruvbox blue.
+func drawRainCloud(img *image.RGBA, cx, cy int) {
+	drawCloudBody(img, cx, cy)
+	for _, dx := range []int{-16, 0, 16} {
+		draw.Draw(img, image.Rect(cx+dx-2, cy+20, cx+dx+2, cy+40),
+			&image.Uniform{GruvBlue}, image.Point{}, draw.Src)
+	}
+}
+
+// drawSnowCloud draws the shared cloud body plus three small dots
+// beneath it in gruvbox fg (off-white, evoking snowflakes).
+func drawSnowCloud(img *image.RGBA, cx, cy int) {
+	drawCloudBody(img, cx, cy)
+	for _, dx := range []int{-16, 0, 16} {
+		fillCircle(img, cx+dx, cy+30, 4, GruvFg)
+	}
+}
+
 // SunriseBackground bakes the sunrise scene's static chrome: a
 // horizontal day-arc (yellow→orange gradient) across the body area,
 // three fixed reference ticks at the sunrise/noon/sunset positions,
