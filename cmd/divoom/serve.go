@@ -12,159 +12,27 @@ import (
 	"github.com/dragonpaw/divoom/internal/render"
 	"github.com/dragonpaw/divoom/internal/scene"
 	"github.com/dragonpaw/divoom/internal/widget"
-	"github.com/dragonpaw/divoom/internal/widget/calendar"
-	"github.com/dragonpaw/divoom/internal/widget/easter"
-	"github.com/dragonpaw/divoom/internal/widget/facts"
-	"github.com/dragonpaw/divoom/internal/widget/finance"
-	githubw "github.com/dragonpaw/divoom/internal/widget/github"
-	"github.com/dragonpaw/divoom/internal/widget/news"
-	"github.com/dragonpaw/divoom/internal/widget/quotes"
-	"github.com/dragonpaw/divoom/internal/widget/seismic"
-	"github.com/dragonpaw/divoom/internal/widget/sky"
-	"github.com/dragonpaw/divoom/internal/widget/weather"
-	"github.com/dragonpaw/divoom/internal/widget/wikipedia"
+	"github.com/dragonpaw/divoom/internal/widget/homeassistant"
 )
 
-// hnKeywords gates which HackerNews stories qualify for the hn scene.
-// Tuned to Ash's interests (Claude, Linux, 3D printing, PC gaming).
-var hnKeywords = []string{
-	"claude", "anthropic", "llm",
-	"linux", "kernel", "wayland",
-	"3d print", "voron", "klipper",
-	"steam", "valve", "proton",
-}
-
-// runServe installs per-scene backgrounds, then rotates scenes forever.
-// Each scene's widget refreshes on unload, so the next activation
-// renders from a warm cache without waiting on the network. Time + Date
-// + DoW are always on top; the bottom area swaps Markets / Sky / Ambient.
+// runServe installs the scene background, then rotates forever. Time +
+// Date + DoW are always on top; the body area shows homeassistant.
 func runServe(ctx context.Context) error {
 	client, _, err := connectToFrame(ctx)
 	if err != nil {
 		return err
 	}
 
-	weatherWidget := weather.New("37.9358", "-122.3477")
-	// Seed sensible cold/hot defaults for the configured unit. The
-	// scenes.go init() bakes in F defaults (50/80) — for a Celsius
-	// location those make no sense, so swap in C-equivalent values
-	// (~10/27) immediately. LoadThresholds will replace these once
-	// the async fit completes.
-	seedCold, seedHot := 50, 80
-	if weatherWidget.Unit() != "F" {
-		seedCold, seedHot = 10, 27
+	haURL, haToken := os.Getenv("HA_URL"), os.Getenv("HA_TOKEN")
+	if haURL == "" || haToken == "" {
+		return fmt.Errorf("HA_URL and HA_TOKEN must both be set")
 	}
-	SetWeatherThresholds(seedCold, seedHot)
-	// Auto-calibrate weather temperature colour thresholds to the
-	// location's climate. Fire-and-forget: daemon startup doesn't wait
-	// on the archive API (it can take 5-10s over 5 years of data).
-	// Until it returns, the seeded defaults above stand; on success the
-	// next scene activation picks up the new bounds via atomic load.
-	go func() {
-		cold, hot, err := weatherWidget.LoadThresholds(ctx)
-		if err != nil {
-			slog.Warn("weather threshold calibration failed; using static defaults",
-				"err", err, "unit", weatherWidget.Unit(),
-				"cold", seedCold, "hot", seedHot)
-			return
-		}
-		SetWeatherThresholds(cold, hot)
-		slog.Info("weather thresholds calibrated",
-			"lat", weatherWidget.Lat(),
-			"lon", weatherWidget.Lon(),
-			"unit", weatherWidget.Unit(),
-			"cold_below", cold,
-			"hot_at_or_above", hot,
-		)
-	}()
-
 	widgets := map[string]widget.Widget{
-		"markets":    finance.NewRotating(parseTickerList(os.Getenv("DIVOOM_TICKERS"))),
-		"moonphase":  sky.NewMoon(),
-		"hn":         news.NewHN(hnKeywords),
-		"calendar":   calendar.NewCalendar(),
-		"easter":     easter.New(),
-		"babylon5":   quotes.NewBabylon5(),
-		"startrek":   quotes.NewStarTrek(),
-		"discworld":  quotes.NewDiscworld(),
-		"jargon":     quotes.NewJargonFile(),
-		"catfacts":   facts.NewCatFact(),
-		"didyouknow": facts.NewUselessFact(),
-		"til":        facts.NewTIL(),
-		"wordnik":    quotes.NewWordnik(),
-		"stoics":     quotes.NewStoics(),
-		"twain":      quotes.NewTwain(),
-		"fortune":    quotes.NewFortune(),
-		"sunrise":    sky.NewSunrise(),
-		"weather":    weatherWidget,
-		"forecast":   weather.NewForecast("37.9358", "-122.3477"),
-		"zenquotes":  quotes.NewZenQuotes(),
-		"devil":      quotes.NewDevilsDictionary(),
-		// nasa + cocktail scenes have no live widget — their bg JPGs
-		// are baked with the latest photo + text at `divoom push` time
-		// (see scene_baked.go). The cloud proxy whitelist that blocks
-		// Image DispElement URLs is the reason.
-		"onthisday":  wikipedia.NewOnThisDay(),
-		"iss":        sky.NewISS("37.9358", "-122.3477"),
-		"seismic":    seismic.New("37.9358", "-122.3477"),
+		"homeassistant": homeassistant.New(haURL, haToken),
 	}
-
-	// GitHub scene is opt-in via env vars. Both must be set: without the
-	// token the unauthenticated REST quota (60 req/hr) is too small for
-	// the rotation cadence, and without the user there's nobody to query
-	// for. When either is missing the widget isn't constructed and
-	// buildScenes drops the scene from the rotation entirely.
-	if ghUser, ghToken := os.Getenv("GITHUB_USER"), os.Getenv("GITHUB_TOKEN"); ghUser != "" && ghToken != "" {
-		widgets["github"] = githubw.New(ghUser, ghToken)
-		slog.Info("github scene enabled", "user", ghUser)
-	} else {
-		slog.Info("github scene disabled (set GITHUB_USER + GITHUB_TOKEN)")
-	}
-
-	// Agenda scene is opt-in via DIVOOM_AGENDA_ICS_URL — a public
-	// iCalendar feed URL. Unset/empty drops the scene from rotation.
-	if url := os.Getenv("DIVOOM_AGENDA_ICS_URL"); url != "" {
-		widgets["agenda"] = calendar.NewAgenda(url)
-		slog.Info("agenda scene enabled")
-	} else {
-		slog.Info("agenda scene disabled (set DIVOOM_AGENDA_ICS_URL)")
-	}
-
-	// Reddit scene is opt-in via DIVOOM_SUBREDDITS — a comma-separated
-	// list of subreddit names. Unset/empty drops the scene from the
-	// rotation entirely (same gate-pattern as the github scene).
-	if subs := parseSubredditList(os.Getenv("DIVOOM_SUBREDDITS")); len(subs) > 0 {
-		widgets["reddit"] = news.NewRedditTopOfDay(subs)
-		slog.Info("reddit scene enabled", "subs", subs)
-	} else {
-		slog.Info("reddit scene disabled (set DIVOOM_SUBREDDITS)")
-	}
+	slog.Info("homeassistant scene enabled", "url", haURL)
 
 	scenes := buildScenes(widgets)
-
-	// Priority bump: scenes named in DIVOOM_PRIORITY_SCENES get their
-	// existing tier weight multiplied by PriorityMultiplier — layered
-	// on top of the per-scene tier (informational vs entertaining) so a
-	// user-priority informational scene fires 160:20 vs the default
-	// entertaining baseline. Unset/empty applies no bumps; the tier
-	// weights are the baseline. Unknown names are logged and ignored —
-	// a typo shouldn't crash startup.
-	priorityNames := parsePriorityScenes(os.Getenv("DIVOOM_PRIORITY_SCENES"))
-	for _, name := range priorityNames {
-		bumped := false
-		for _, s := range scenes {
-			if s.Name == name {
-				s.Weight *= PriorityMultiplier
-				slog.Info("priority scene weight multiplied",
-					"scene", name, "factor", PriorityMultiplier, "new_weight", s.Weight)
-				bumped = true
-				break
-			}
-		}
-		if !bumped {
-			slog.Warn("priority scene not found", "name", name)
-		}
-	}
 
 	driver := &scene.Driver{
 		Client:   client,
@@ -173,11 +41,6 @@ func runServe(ctx context.Context) error {
 	}
 	logStartup(driver)
 
-	// In-process calendar refresh — startup push + every midnight.
-	// Calendar-only so no font reload / divoom_app crash-restart;
-	// keeps "today" current on the wall without a NAS-side cron.
-	startDailyRefresh(ctx)
-
 	if err := driver.Run(ctx); err != nil {
 		slog.Error("scene driver returned", "err", err)
 	}
@@ -185,17 +48,16 @@ func runServe(ctx context.Context) error {
 }
 
 // counter is the optional Count() interface implemented by static quote
-// sources (`*quotes.Source`). Widgets that fetch from the network or
-// rotate across sub-widgets don't implement it and log as "live".
+// sources. Nothing in this fork implements it anymore, but logStartup
+// still checks for it defensively.
 type counter interface {
 	Count() int
 }
 
 // logStartup reports the rotation config: one line per scene with its
-// weight, share %, and entry count ("live" for HTTP-fetching widgets and
-// rotators, an integer for static quote sources, "—" for scenes with no
-// widget). Operators reading the daemon logs see exactly what's wired up
-// without cracking open the source.
+// weight, share %, and entry count ("live" for HTTP-fetching widgets,
+// "—" for scenes with no widget). Operators reading the daemon logs see
+// exactly what's wired up without cracking open the source.
 func logStartup(d *scene.Driver) {
 	slog.Info("scene rotation starting", "scenes", len(d.Scenes), "duration", scene.SceneDuration)
 	totalWeight := 0
@@ -225,88 +87,16 @@ func logStartup(d *scene.Driver) {
 	}
 }
 
-// pushSceneBackgrounds renders each scene's bg JPG and adb-pushes it to
-// the device. Done once at startup; the device will reference these paths
-// via BackgroundImageLocalFlag: 1 in scene layouts.
+// pushSceneBackgrounds renders the homeassistant bg JPG and adb-pushes
+// it to the device. Done once at startup; the device references this
+// path via BackgroundImageLocalFlag: 1 in the scene layout.
 func pushSceneBackgrounds(ctx context.Context) error {
-	now := time.Now()
-	bgs := []struct {
-		render func() ([]byte, error)
-		path   string
-	}{
-		{func() ([]byte, error) { return render.SceneBackground(render.SceneMarkets, render.FormatJPEG, now) }, bgMarkets},
-		{func() ([]byte, error) { return render.SceneBackground(render.SceneHN, render.FormatJPEG, now) }, bgHN},
-		{func() ([]byte, error) {
-			return render.CalendarBackground(now, parseSpecialDates(os.Getenv("DIVOOM_SPECIAL_DATES")), usFederalHolidays(now.Year()), render.FormatJPEG)
-		}, bgCalendar},
-		{func() ([]byte, error) { return render.SceneBackground(render.SceneEaster, render.FormatJPEG, now) }, bgEaster},
-		{func() ([]byte, error) { return render.SceneBackground(render.SceneCatFacts, render.FormatJPEG, now) }, bgCatFacts},
-		{func() ([]byte, error) { return render.SceneBackground(render.SceneDidYouKnow, render.FormatJPEG, now) }, bgDidYouKnow},
-		{func() ([]byte, error) { return render.SunriseBackground(render.FormatJPEG, now) }, bgSunrise},
-		{func() ([]byte, error) { return render.SceneBackground(render.SceneOnThisDay, render.FormatJPEG, now) }, bgOnThisDay},
-		{func() ([]byte, error) { return render.SceneBackground(render.SceneISS, render.FormatJPEG, now) }, bgISS},
-		{func() ([]byte, error) { return render.SceneBackground(render.SceneGitHub, render.FormatJPEG, now) }, bgGitHub},
-		{func() ([]byte, error) { return render.SceneBackground(render.SceneTIL, render.FormatJPEG, now) }, bgTIL},
-		{func() ([]byte, error) { return render.SceneBackground(render.SceneReddit, render.FormatJPEG, now) }, bgReddit},
-		{func() ([]byte, error) { return render.SceneBackground(render.SceneForecast, render.FormatJPEG, now) }, bgForecast},
-		{func() ([]byte, error) { return render.SceneBackground(render.SceneSeismic, render.FormatJPEG, now) }, bgSeismic},
-		{func() ([]byte, error) { return render.SceneBackground(render.SceneAgenda, render.FormatJPEG, now) }, bgAgenda},
-		{func() ([]byte, error) { return render.SceneBackground(render.ScenePickup, render.FormatJPEG, now) }, bgPickup},
-		{func() ([]byte, error) { return render.GenartBackground(now, render.FormatJPEG) }, bgGenart},
+	data, err := render.SceneBackground(render.SceneHomeAssistant, render.FormatJPEG, time.Now())
+	if err != nil {
+		return fmt.Errorf("render %s bg: %w", bgHomeAssistant, err)
 	}
-	// Moonphase: one bg per pre-rendered disc variant across the synodic
-	// cycle (14 total). BgPathFor picks the right one per phase reading.
-	for i := 0; i < render.MoonPhaseVariants; i++ {
-		idx, path := i, moonBackgrounds[i]
-		bgs = append(bgs, struct {
-			render func() ([]byte, error)
-			path   string
-		}{
-			render: func() ([]byte, error) {
-				return render.SceneMoonphaseBackground(idx, render.FormatJPEG, now)
-			},
-			path: path,
-		})
-	}
-	// Quote-family scenes: each carries baked chrome (in-universe header /
-	// book-page imprint / shell prompt + status bar) so the device's
-	// 6-element cap stays free for the dynamic body text. See
-	// quote_family.go for the per-scene chrome strings.
-	for _, q := range quoteSceneRegistry {
-		q := q
-		bgs = append(bgs, struct {
-			render func() ([]byte, error)
-			path   string
-		}{
-			render: func() ([]byte, error) {
-				return render.SceneFamilyBackground(q.Scene, q.ChromeFor(now), render.FormatJPEG, now)
-			},
-			path: q.BgPath,
-		})
-	}
-	// One bg per weather outlook, each carrying the matching icon in the
-	// bottom-right corner; the scene's BgPathFor picks among these at
-	// activation time based on the current widget value.
-	for _, o := range weatherOutlooks {
-		outlook, path := o.Outlook, o.BgPath
-		bgs = append(bgs, struct {
-			render func() ([]byte, error)
-			path   string
-		}{
-			render: func() ([]byte, error) {
-				return render.SceneWeatherBackground(outlook, render.FormatJPEG, now)
-			},
-			path: path,
-		})
-	}
-	for _, b := range bgs {
-		data, err := b.render()
-		if err != nil {
-			return fmt.Errorf("render %s bg: %w", b.path, err)
-		}
-		if err := pushBytes(ctx, data, b.path); err != nil {
-			return fmt.Errorf("push %s: %w", b.path, err)
-		}
+	if err := pushBytes(ctx, data, bgHomeAssistant); err != nil {
+		return fmt.Errorf("push %s: %w", bgHomeAssistant, err)
 	}
 	return nil
 }

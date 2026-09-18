@@ -226,11 +226,20 @@ func (d *Driver) Run(ctx context.Context) error {
 	// failures don't kick a scene out of rotation permanently.
 	go d.retryUnhealthy(ctx)
 
+	// activateRetryDelay is how long a failed activate() (typically the
+	// frame being unreachable -- mid-reboot, network blip) waits before
+	// retrying, instead of sitting on the full SceneDuration. Keeps the
+	// device's own native dial on screen for as short a window as
+	// possible after any disconnect.
+	const activateRetryDelay = 10 * time.Second
+
 	var last *Scene
 	for {
 		s := d.pick(last)
+		wait := SceneDuration
 		if err := d.activate(ctx, s); err != nil {
 			slog.Error("scene install failed", "scene", s.Name, "err", err)
+			wait = activateRetryDelay
 		}
 		d.pickMu.Lock()
 		d.lastShown[s] = time.Now()
@@ -238,7 +247,7 @@ func (d *Driver) Run(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return nil
-		case <-time.After(SceneDuration):
+		case <-time.After(wait):
 		}
 		// Refresh in the background — the next scene's install must
 		// not wait on this widget's network call.

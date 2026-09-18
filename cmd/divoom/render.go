@@ -13,8 +13,6 @@ import (
 )
 
 // runRender writes every known scene background to <outDir>/scenes/<name>.jpg.
-// Designed to be called from CI, which then commits the output tree to a
-// public sibling repo and lets GitHub Pages serve it.
 func runRender(args []string) error {
 	fs := flag.NewFlagSet("render", flag.ContinueOnError)
 	out := fs.String("out", "dist", "output directory (a scenes/ subdir will be created)")
@@ -28,9 +26,9 @@ func runRender(args []string) error {
 	}
 
 	// Hardcoded to keep every screenshot reproducible — year-progress
-	// bar, calendar "today" cell, time/day-of-week header and all
-	// other time-dependent baking line up across the scene set.
-	// Wednesday 2026-05-27 12:34 local (-07:00).
+	// bar, time/day-of-week header and all other time-dependent baking
+	// line up across the scene set. Wednesday 2026-05-27 12:34 local
+	// (-07:00).
 	now := time.Date(2026, time.May, 27, 12, 34, 0, 0,
 		time.FixedZone("local", -7*3600))
 	scenes := []struct {
@@ -45,110 +43,10 @@ func runRender(args []string) error {
 		{name: "hero", render: func() ([]byte, error) {
 			return render.HeroBackground(render.FormatJPEG, now)
 		}},
-		// Per-scene backgrounds the daemon pushes via adb.
-		{name: "scene-markets", render: func() ([]byte, error) {
-			return render.SceneBackground(render.SceneMarkets, render.FormatJPEG, now)
+		// The one scene the daemon pushes via adb.
+		{name: "scene-homeassistant", render: func() ([]byte, error) {
+			return render.SceneBackground(render.SceneHomeAssistant, render.FormatJPEG, now)
 		}},
-		{name: "scene-hn", render: func() ([]byte, error) {
-			return render.SceneBackground(render.SceneHN, render.FormatJPEG, now)
-		}},
-		{name: "scene-calendar", render: func() ([]byte, error) {
-			return render.CalendarBackground(now, parseSpecialDates(os.Getenv("DIVOOM_SPECIAL_DATES")), usFederalHolidays(now.Year()), render.FormatJPEG)
-		}},
-		{name: "scene-easter", render: func() ([]byte, error) {
-			return render.SceneBackground(render.SceneEaster, render.FormatJPEG, now)
-		}},
-		{name: "scene-catfacts", render: func() ([]byte, error) {
-			return render.SceneBackground(render.SceneCatFacts, render.FormatJPEG, now)
-		}},
-		{name: "scene-didyouknow", render: func() ([]byte, error) {
-			return render.SceneBackground(render.SceneDidYouKnow, render.FormatJPEG, now)
-		}},
-		{name: "scene-sunrise", render: func() ([]byte, error) {
-			return render.SunriseBackground(render.FormatJPEG, now)
-		}},
-		{name: "scene-nasa", render: func() ([]byte, error) {
-			return render.SceneBackground(render.SceneNASA, render.FormatJPEG, now)
-		}},
-		{name: "scene-cocktail", render: func() ([]byte, error) {
-			return render.SceneBackground(render.SceneCocktail, render.FormatJPEG, now)
-		}},
-		{name: "scene-onthisday", render: func() ([]byte, error) {
-			return render.SceneBackground(render.SceneOnThisDay, render.FormatJPEG, now)
-		}},
-		{name: "scene-iss", render: func() ([]byte, error) {
-			return render.SceneBackground(render.SceneISS, render.FormatJPEG, now)
-		}},
-		{name: "scene-github", render: func() ([]byte, error) {
-			return render.SceneBackground(render.SceneGitHub, render.FormatJPEG, now)
-		}},
-		{name: "scene-til", render: func() ([]byte, error) {
-			return render.SceneBackground(render.SceneTIL, render.FormatJPEG, now)
-		}},
-		{name: "scene-reddit", render: func() ([]byte, error) {
-			return render.SceneBackground(render.SceneReddit, render.FormatJPEG, now)
-		}},
-		{name: "scene-forecast", render: func() ([]byte, error) {
-			return render.SceneBackground(render.SceneForecast, render.FormatJPEG, now)
-		}},
-		{name: "scene-seismic", render: func() ([]byte, error) {
-			return render.SceneBackground(render.SceneSeismic, render.FormatJPEG, now)
-		}},
-		{name: "scene-agenda", render: func() ([]byte, error) {
-			return render.SceneBackground(render.SceneAgenda, render.FormatJPEG, now)
-		}},
-		{name: "scene-pickup", render: func() ([]byte, error) {
-			return render.SceneBackground(render.ScenePickup, render.FormatJPEG, now)
-		}},
-		{name: "scene-genart", render: func() ([]byte, error) {
-			return render.GenartBackground(now, render.FormatJPEG)
-		}},
-	}
-	// Quote-family scenes — baked chrome per family (see quote_family.go).
-	for _, q := range quoteSceneRegistry {
-		q := q
-		scenes = append(scenes, struct {
-			name   string
-			render func() ([]byte, error)
-		}{
-			name: "scene-" + q.Name,
-			render: func() ([]byte, error) {
-				return render.SceneFamilyBackground(q.Scene, q.ChromeFor(now), render.FormatJPEG, now)
-			},
-		})
-	}
-	// One preview per pre-rendered moonphase variant (14 in all), mirroring
-	// the daemon's pushSceneBackgrounds loop so the disc set can be eyeballed
-	// without flashing the device.
-	for i := 0; i < render.MoonPhaseVariants; i++ {
-		idx := i
-		scenes = append(scenes, struct {
-			name   string
-			render func() ([]byte, error)
-		}{
-			name: fmt.Sprintf("scene-moonphase-%02d", idx),
-			render: func() ([]byte, error) {
-				return render.SceneMoonphaseBackground(idx, render.FormatJPEG, now)
-			},
-		})
-	}
-	// One preview per weather outlook so the icon set can be spot-checked
-	// without spinning up the daemon.
-	for _, outlook := range []string{
-		"clear", "cloudy", "overcast", "rain",
-		"drizzle", "snow", "fog", "thunder",
-		"smoke", "hazard",
-	} {
-		o := outlook
-		scenes = append(scenes, struct {
-			name   string
-			render func() ([]byte, error)
-		}{
-			name: "scene-weather-" + o,
-			render: func() ([]byte, error) {
-				return render.SceneWeatherBackground(o, render.FormatJPEG, now)
-			},
-		})
 	}
 
 	if len(scenes) == 0 {

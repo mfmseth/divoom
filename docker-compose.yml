@@ -1,6 +1,8 @@
 services:
   divoom-dashboard:
-    image: ghcr.io/dragonpaw/divoom:latest
+    image: ghcr.io/mfmseth/divoom:latest
+    build:
+      context: .
     container_name: divoom-dashboard
     restart: unless-stopped
     # Host networking so cloud-discovery sees the same LAN the frame is on.
@@ -30,10 +32,13 @@ services:
       DIVOOM_SPECIAL_DATES: ${DIVOOM_SPECIAL_DATES:-}
       DIVOOM_SUBREDDITS: ${DIVOOM_SUBREDDITS:-}
       DIVOOM_PRIORITY_SCENES: ${DIVOOM_PRIORITY_SCENES:-}
+      DIVOOM_SCENES_ONLY: ${DIVOOM_SCENES_ONLY:-}
       # AGENDA_ICS_URL points at a public iCalendar feed; unset disables
       # the agenda scene. PICKUP_SCHEDULE is "trash:mon,recycle:wed,..."
       # — when set, the pickup-reminder scene fires the evening before
       # and morning of each configured pickup.
       DIVOOM_AGENDA_ICS_URL: ${DIVOOM_AGENDA_ICS_URL:-}
+      HA_URL: ${HA_URL:-}
+      HA_TOKEN: ${HA_TOKEN:-}
       DIVOOM_PICKUP_SCHEDULE: ${DIVOOM_PICKUP_SCHEDULE:-}
     command: ["serve"]

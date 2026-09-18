@@ -38,6 +38,7 @@ var (
 	GruvYellow   = color.RGBA{0xfa, 0xbd, 0x2f, 0xff}
 	GruvBlue     = color.RGBA{0x83, 0xa5, 0x98, 0xff}
 	GruvPurple   = color.RGBA{0xd3, 0x86, 0x9b, 0xff}
+
 	GruvAqua     = color.RGBA{0x8e, 0xc0, 0x7b, 0xff}
 	GruvOrange   = color.RGBA{0xfe, 0x80, 0x19, 0xff}
 
@@ -121,6 +122,7 @@ const (
 	SceneAgenda
 	SceneGenart
 	ScenePickup
+	SceneHomeAssistant
 )
 
 // SceneBackground builds the hero frame and draws the scene's glyph into
@@ -220,6 +222,8 @@ func SceneBackground(scene Scene, format Format, now time.Time) ([]byte, error) 
 		// can run several lines.
 		drawSceneGlyph(img, scene)
 		drawBakedSceneTitle(img, "next up")
+	case SceneHomeAssistant:
+		drawBakedSceneTitle(img, "home overview")
 	case SceneSeismic:
 		// No corner glyph — the seismograph trace fought the commentary
 		// line for the bottom-right quadrant and carried no data of its
@@ -707,6 +711,7 @@ func drawBakedSceneTitle(img *image.RGBA, title string) {
 	defer face.Close()
 	drawLabelCentered(img, title, face, CanvasW/2, 505, GruvFgDark)
 }
+
 
 // drawNASACredit bakes the nasa scene's title row as a two-tone
 // "NASA · astronomy picture of the day" — replaces the standard
