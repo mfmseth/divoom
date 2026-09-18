@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/dragonpaw/divoom/internal/frame"
@@ -88,39 +89,24 @@ func timeColor(now time.Time) string {
 	return cOrange
 }
 
-// weekendStatus returns the operator-footer right-hand string and its
-// FontColor. Weekend window is Friday 18:00 through Monday 03:00 (local
-// time) — inside it the text becomes "weekend!" in cYellow as a small
-// festive marker. Outside it, the row reverts to the dim countdown
-// "weekend+Nd" (Mon-Thu after 3am: 4..1 days; Fri before 6pm: +0d).
-func weekendStatus(now time.Time) (text, color string) {
-	wd := now.Weekday()
-	hour := now.Hour()
-	weekend := false
-	switch wd {
-	case time.Saturday, time.Sunday:
-		weekend = true
-	case time.Friday:
-		weekend = hour >= 18
-	case time.Monday:
-		weekend = hour < 3
-	}
-	if weekend {
-		return "weekend!", cYellow
-	}
-	// Outside the window — countdown to Saturday morning.
-	n := 5 - int(wd)
-	if n < 0 {
-		n = 0 // defensive; Friday-pre-6pm falls here as +0d
-	}
-	return fmt.Sprintf("weekend-%dd", n), cFgDark
+// currentWeatherLine holds the most recently fetched "<CONDITION> ·
+// temp°" text (see haStashWeatherLine in scene_homeassistant.go),
+// shared between the homeassistant scene's OnActivate and alwaysOn.
+// alwaysOn has no access to widget data — it's a pure function of
+// `now` — so this is the bridge that lets it show live weather in the
+// idWeekend footer slot instead of the (now unused) weekend countdown.
+// A zero value (before the first fetch completes) renders as "".
+var currentWeatherLine atomic.Value // string
+
+func loadWeatherLine() string {
+	v, _ := currentWeatherLine.Load().(string)
+	return v
 }
 
 // alwaysOn builds the shared header every scene installs on top of its
-// own Elements — day name, big clock, and the date/weekend footer row.
+// own Elements — day name, big clock, and a date/weather footer row.
 // Wired in via scene.Driver.AlwaysOn (see serve.go).
 func alwaysOn(now time.Time) []frame.DispElement {
-	weekendText, weekendColor := weekendStatus(now)
 	return []frame.DispElement{
 		{
 			// Week is a device built-in (renders the day name from
@@ -162,19 +148,18 @@ func alwaysOn(now time.Time) []frame.DispElement {
 				now.YearDay(),
 				isoWeek(now)),
 		},
-		// Right half of the footer row — weekend status, right-aligned
-		// so it can carry its own colour (cYellow during the Fri 6pm →
-		// Mon 3am window, cFgDark otherwise) without recolouring the
-		// numeric metadata to its left.
+		// Right half of the footer row — live weather (see
+		// currentWeatherLine), right-aligned, clock-orange so it reads
+		// as part of the same header system as the clock above it.
 		{
 			ID: idWeekend, Type: "Text",
 			StartX: 40, StartY: 400, Width: 720, Height: 44,
 			Align:       1,
 			FontSize:    28,
 			FontID:      fontMono,
-			FontColor:   weekendColor,
+			FontColor:   cOrange,
 			BgColor:     cBgHard,
-			TextMessage: weekendText,
+			TextMessage: loadWeatherLine(),
 		},
 	}
 }

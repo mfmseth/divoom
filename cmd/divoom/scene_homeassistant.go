@@ -15,24 +15,26 @@ import (
 // of introducing a second accent color.
 const mhAccent = cOrange
 
-// "homeassistant" — a combined weather+presence row, and one row per
-// area (Upstairs / Downstairs / Bedroom), each area row already folding
-// that area's climate, occupancy, and lights-on state into a single
-// self-labeled line. The widget emits
+// "homeassistant" — a presence chip and one row per area (Upstairs /
+// Downstairs / Bedroom), each area row already folding that area's
+// climate, occupancy, and lights-on state into a single self-labeled
+// line. The widget emits
 // "<weather>|<icon>|<presence>|<upstairs>|<downstairs>|<bedroom>", with
 // each area field pre-formatted as "AREA · temp° [· OCC] [· LIT]" — kept
 // short since the device clips (rather than wraps) text that overflows
 // its box width.
 //
-// Weather and presence share ONE Text element (not two) on purpose: the
-// device's AlwaysOn header already spends 2 of its 6-Text budget on the
-// date/weekend footer, so 4 scene rows is the most this scene can use —
-// a 5th (weather and presence as separate rows) silently dropped
-// whichever Text element landed last in the install (Bedroom), since
-// the always-on elements are prepended ahead of the scene's own.
+// Weather doesn't get its own scene Text element — OnActivate stashes
+// it into currentWeatherLine (scenes.go), which alwaysOn reads into the
+// idWeekend footer slot next to the clock, so weather lives in the same
+// persistent header as the time/date instead of eating one of this
+// scene's own 4 Text slots. That keeps the scene+header total at
+// exactly 6 (2 header + 4 scene) with presence back to being its own
+// row — see the commit history around 2026-09-18 for why 5+2 silently
+// dropped whichever Text element landed last (device caps Text
+// elements at 6 total across header + scene).
 //
-//   - Weather + presence: "<CONDITION> · temp° · HOME", filled in an
-//     accent-orange chip when presence is HOME.
+//   - Presence: HOME or AWAY, filled in an accent-orange chip when HOME.
 //   - Area rows: plain text, one per area, in the order Upstairs /
 //     Downstairs / Bedroom.
 func homeAssistantScene(widgets map[string]widget.Widget) *scene.Scene {
@@ -53,37 +55,37 @@ func homeAssistantScene(widgets map[string]widget.Widget) *scene.Scene {
 		Elements: []frame.DispElement{
 			{
 				ID: idSceneMain, Type: "Text",
-				StartX: 60, StartY: 540, Width: 680, Height: 60,
-				Align: 2, FontSize: 40, FontID: fontMono,
-				FontColor: cOrange, BgColor: cBgHard,
+				StartX: 60, StartY: 490, Width: 680, Height: 110,
+				Align: 2, FontSize: 90, FontID: fontProse,
+				FontColor: cFg, BgColor: cBgHard,
 			},
 			{
 				ID: idSceneSub1, Type: "Text",
-				StartX: 60, StartY: 680, Width: 680, Height: 55,
+				StartX: 60, StartY: 630, Width: 680, Height: 55,
 				Align: 0, FontSize: 30, FontID: fontMono,
 				FontColor: cFg, BgColor: cBgHard,
 			},
 			{
 				ID: idSceneSub3, Type: "Text",
-				StartX: 60, StartY: 745, Width: 680, Height: 55,
+				StartX: 60, StartY: 695, Width: 680, Height: 55,
 				Align: 0, FontSize: 30, FontID: fontMono,
 				FontColor: cFg, BgColor: cBgHard,
 			},
 			{
 				ID: idSceneTitle, Type: "Text",
-				StartX: 60, StartY: 810, Width: 680, Height: 55,
+				StartX: 60, StartY: 760, Width: 680, Height: 55,
 				Align: 0, FontSize: 30, FontID: fontMono,
 				FontColor: cFg, BgColor: cBgHard,
 			},
 		},
 		Widget: widgets["homeassistant"],
 		Mounts: []scene.Mount{
-			{ID: idSceneMain, Format: haWeatherAndPresence},
+			{ID: idSceneMain, Format: haPresence},
 			{ID: idSceneSub1, Format: pipeAt(3)},
 			{ID: idSceneSub3, Format: pipeAt(4)},
 			{ID: idSceneTitle, Format: pipeAt(5)},
 		},
-		OnActivate: haChipColorize,
+		OnActivate: haOnActivate,
 	}
 }
 
@@ -96,17 +98,19 @@ const (
 	bgHomeAssistantSnow = "/userdata/wallclock_bg_homeassistant_snow.jpg"
 )
 
-func haWeatherAndPresence(raw string) (text, color string) {
-	weather := weatherPipeField(raw, 0)
-	presence := strings.ToUpper(weatherPipeField(raw, 2))
-	return weather + " · " + presence, cOrange
+func haPresence(raw string) (text, color string) {
+	return strings.ToUpper(weatherPipeField(raw, 2)), cFg
 }
 
-// haChipColorize fills idSceneMain's BgColor with the accent when
-// presence is HOME, and swaps FontColor to the dark bg color for
-// contrast against that fill. AWAY keeps the default text-on-hero-bg
-// look set in the Elements above.
-func haChipColorize(_ time.Time, raw string, elements []frame.DispElement) {
+// haOnActivate does two things every activation: stashes the current
+// weather line into currentWeatherLine (scenes.go) so alwaysOn's next
+// build picks it up in the header, and fills idSceneMain's BgColor with
+// the accent when presence is HOME (swapping FontColor to the dark bg
+// color for contrast against that fill). AWAY keeps the default
+// text-on-hero-bg look set in the Elements above.
+func haOnActivate(_ time.Time, raw string, elements []frame.DispElement) {
+	currentWeatherLine.Store(weatherPipeField(raw, 0))
+
 	presence := weatherPipeField(raw, 2)
 	if presence != "HOME" {
 		return
