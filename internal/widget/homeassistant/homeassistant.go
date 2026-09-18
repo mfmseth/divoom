@@ -2,9 +2,11 @@
 // grouped by area (Upstairs / Downstairs / Bedroom), and emits a
 // pipe-separated
 // "<weather text>|<icon>|<presence>|<upstairs>|<downstairs>|<bedroom>"
-// string for the homeassistant scene — each area field already combines
-// that area's climate, occupancy, and lights-on state into one line, and
-// icon is "rain", "snow", or "" depending on today's forecast.
+// string for the homeassistant scene. Each area field is
+// "AREA · temp°@FLAGS" — a short display text plus a hidden "@FLAGS"
+// suffix (comma-joined OCC/LIT, or empty) the scene uses only to color
+// the row, never displays — see fetchArea. icon is "rain", "snow", or
+// "" depending on today's forecast.
 package homeassistant
 
 import (
@@ -117,14 +119,11 @@ func (c *Client) getState(ctx context.Context, entityID string) (*haState, error
 
 // Fetch queries all configured entities in parallel and folds them into
 // "<weather>|<icon>|<presence>|<upstairs>|<downstairs>|<bedroom>", each
-// area field already formatted as "AREA · temp° [· OCCUPIED] [· LIGHTS
-// ON]" — the worst case (Downstairs with both flags) is 40 characters,
-// which the scene's area-row font size is sized to fit; the device
-// clips (rather than wraps) text that overflows its box width, so
-// don't grow this without also checking that row's FontSize/Width in
-// scene_homeassistant.go. A failed individual lookup degrades that one
-// piece rather than failing the whole scene — a single down entity
-// shouldn't blank the whole card.
+// area field formatted as "AREA · temp°@FLAGS" (see fetchArea — the
+// scene splits off "@FLAGS" for coloring and never displays it). A
+// failed individual lookup degrades that one piece rather than failing
+// the whole scene — a single down entity shouldn't blank the whole
+// card.
 func (c *Client) Fetch(ctx context.Context) (string, error) {
 	var wg sync.WaitGroup
 	var presence, weatherText, icon string
@@ -249,8 +248,12 @@ func iconFor(condition string) string {
 }
 
 // fetchArea queries one area's climate, occupancy, and light group
-// concurrently and folds them into "AREA · temp° [· OCCUPIED] [·
-// LIGHTS ON]".
+// concurrently and folds them into "AREA · temp°@FLAGS" -- the "@FLAGS"
+// suffix (comma-joined "OCC"/"LIT", or empty) is a hidden sub-field the
+// scene strips before display and uses only to pick the row's color;
+// keeping the visible text to just "AREA · temp°" is what lets the
+// area rows render at a much larger, farther-readable font size than
+// spelling out OCCUPIED/LIGHTS ON would allow.
 func (c *Client) fetchArea(ctx context.Context, a area) string {
 	var wg sync.WaitGroup
 	temp := "—"
@@ -291,12 +294,13 @@ func (c *Client) fetchArea(ctx context.Context, a area) string {
 
 	wg.Wait()
 
-	text := strings.ToUpper(a.name) + " · " + temp
+	var flags []string
 	if occupied {
-		text += " · OCCUPIED"
+		flags = append(flags, "OCC")
 	}
 	if lightsOn {
-		text += " · LIGHTS ON"
+		flags = append(flags, "LIT")
 	}
-	return text
+	text := strings.ToUpper(a.name) + " · " + temp
+	return text + "@" + strings.Join(flags, ",")
 }

@@ -9,25 +9,25 @@ import (
 	"github.com/dragonpaw/divoom/internal/widget"
 )
 
-// "homeassistant" — a big weather readout sized like the always-on
-// clock (its own thing, not sharing a line with anything else), and
-// one row per area (Upstairs / Downstairs / Bedroom), each area row
-// already folding that area's climate, occupancy, and lights-on state
-// into a single self-labeled line. The widget emits
+// "homeassistant" — a big weather readout and three big area rows
+// (Upstairs / Downstairs / Bedroom), all sized like the always-on
+// clock: this is a 10.1" display meant to be read from across a room,
+// so every row gets the same "its own big thing" treatment rather than
+// small dense text. The widget emits
 // "<weather>|<icon>|<presence>|<upstairs>|<downstairs>|<bedroom>" —
-// presence is fetched but not displayed (dropped per request; only
-// the area rows' OCCUPIED/LIGHTS ON flags carry activity info now) —
-// with each area field pre-formatted as "AREA · temp° [· OCCUPIED]
-// [· LIGHTS ON]". Worst case (Downstairs, both flags) is 40
-// characters; the area rows' FontSize 28 / Width 740 are sized to fit
-// that without the device clipping (it clips rather than wraps
-// overflowing text) — check both if this text ever grows.
+// presence is fetched but not displayed (dropped per request). Each
+// area field is "AREA · temp°@FLAGS": the "@FLAGS" suffix is stripped
+// before display and used only to color the row (see areaRow) — that's
+// what keeps the visible text down to ~14-17 characters, short enough
+// to render at FontSize 65 without the device clipping it (it clips
+// rather than wraps text that overflows its box width).
 //
 //   - Weather: "<CONDITION> · temp°" alone, FontSize 65, clock-orange,
-//     no background fill — same plain style as the always-on clock,
-//     just its own row instead of sharing one with presence.
-//   - Area rows: plain text, one per area, in the order Upstairs /
-//     Downstairs / Bedroom.
+//     no background fill — same plain style as the always-on clock.
+//   - Area rows: "AREA · temp°", FontSize 65, centered, colored by
+//     activity/temperature (see areaRow) — same scale and treatment as
+//     the weather row, one per area in the order Upstairs / Downstairs
+//     / Bedroom.
 func homeAssistantScene(widgets map[string]widget.Widget) *scene.Scene {
 	return &scene.Scene{
 		Name:   "homeassistant",
@@ -52,20 +52,20 @@ func homeAssistantScene(widgets map[string]widget.Widget) *scene.Scene {
 			},
 			{
 				ID: idSceneSub1, Type: "Text",
-				StartX: 30, StartY: 650, Width: 740, Height: 60,
-				Align: 0, FontSize: 28, FontID: fontMono,
+				StartX: 40, StartY: 610, Width: 720, Height: 90,
+				Align: 2, FontSize: 65, FontID: fontMono,
 				FontColor: cFg, BgColor: cBgHard,
 			},
 			{
 				ID: idSceneSub3, Type: "Text",
-				StartX: 30, StartY: 725, Width: 740, Height: 60,
-				Align: 0, FontSize: 28, FontID: fontMono,
+				StartX: 40, StartY: 730, Width: 720, Height: 90,
+				Align: 2, FontSize: 65, FontID: fontMono,
 				FontColor: cFg, BgColor: cBgHard,
 			},
 			{
 				ID: idSceneTitle, Type: "Text",
-				StartX: 30, StartY: 800, Width: 740, Height: 60,
-				Align: 0, FontSize: 28, FontID: fontMono,
+				StartX: 40, StartY: 850, Width: 720, Height: 90,
+				Align: 2, FontSize: 65, FontID: fontMono,
 				FontColor: cFg, BgColor: cBgHard,
 			},
 		},
@@ -80,27 +80,28 @@ func homeAssistantScene(widgets map[string]widget.Widget) *scene.Scene {
 }
 
 // areaRow returns a Mount.Format closure that picks segment i (one of
-// the pre-formatted "AREA · temp° [· OCCUPIED] [· LIGHTS ON]" strings)
-// and colors the whole line so activity/temperature reads at a glance
-// without having to parse the words:
+// the widget's "AREA · temp°@FLAGS" strings), strips the hidden
+// "@FLAGS" suffix before display, and colors the whole line so
+// activity/temperature reads at a glance without the row needing to
+// spell out OCCUPIED/LIGHTS ON in text:
 //
-//   - OCCUPIED or LIGHTS ON present → accent orange, so any activity
-//     in that area jumps out regardless of temperature.
+//   - FLAGS non-empty (area occupied or has a light on) → accent
+//     orange, so any activity jumps out regardless of temperature.
 //   - Otherwise → banded by temperature, same comfort logic the old
 //     weather scene used: cold blue-ish (cAqua), comfortable green,
 //     warm yellow, hot red.
 //
 // A single Text element only carries one color for its whole string —
-// there's no way to tint just the temperature or just "OCCUPIED"
-// differently within one line — so this picks the single most useful
-// signal per row instead.
+// there's no way to tint just the temperature differently within one
+// line — so this picks the single most useful signal per row instead.
 func areaRow(i int) func(raw string) (text, color string) {
 	return func(raw string) (text, color string) {
-		text = weatherPipeField(raw, i)
-		if text == "" {
+		field := weatherPipeField(raw, i)
+		if field == "" {
 			return "", ""
 		}
-		if strings.Contains(text, "OCCUPIED") || strings.Contains(text, "LIGHTS ON") {
+		text, flags, _ := strings.Cut(field, "@")
+		if flags != "" {
 			return text, cOrange
 		}
 		return text, areaTempColor(text)
