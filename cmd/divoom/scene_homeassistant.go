@@ -13,10 +13,12 @@ import (
 // into a single self-labeled line. The widget emits
 // "<weather>|<icon>|<presence>|<upstairs>|<downstairs>|<bedroom>" —
 // presence is fetched but not displayed (dropped per request; only
-// the area rows' OCC/LIT flags carry activity info now) — with each
-// area field pre-formatted as "AREA · temp° [· OCC] [· LIT]", kept
-// short since the device clips (rather than wraps) text that overflows
-// its box width.
+// the area rows' OCCUPIED/LIGHTS ON flags carry activity info now) —
+// with each area field pre-formatted as "AREA · temp° [· OCCUPIED]
+// [· LIGHTS ON]". Worst case (Downstairs, both flags) is 40
+// characters; the area rows' FontSize 28 / Width 740 are sized to fit
+// that without the device clipping (it clips rather than wraps
+// overflowing text) — check both if this text ever grows.
 //
 //   - Weather: "<CONDITION> · temp°" alone, FontSize 65, clock-orange,
 //     no background fill — same plain style as the always-on clock,
@@ -47,20 +49,20 @@ func homeAssistantScene(widgets map[string]widget.Widget) *scene.Scene {
 			},
 			{
 				ID: idSceneSub1, Type: "Text",
-				StartX: 60, StartY: 650, Width: 680, Height: 60,
-				Align: 0, FontSize: 34, FontID: fontMono,
+				StartX: 30, StartY: 650, Width: 740, Height: 60,
+				Align: 0, FontSize: 28, FontID: fontMono,
 				FontColor: cFg, BgColor: cBgHard,
 			},
 			{
 				ID: idSceneSub3, Type: "Text",
-				StartX: 60, StartY: 725, Width: 680, Height: 60,
-				Align: 0, FontSize: 34, FontID: fontMono,
+				StartX: 30, StartY: 725, Width: 740, Height: 60,
+				Align: 0, FontSize: 28, FontID: fontMono,
 				FontColor: cFg, BgColor: cBgHard,
 			},
 			{
 				ID: idSceneTitle, Type: "Text",
-				StartX: 60, StartY: 800, Width: 680, Height: 60,
-				Align: 0, FontSize: 34, FontID: fontMono,
+				StartX: 30, StartY: 800, Width: 740, Height: 60,
+				Align: 0, FontSize: 28, FontID: fontMono,
 				FontColor: cFg, BgColor: cBgHard,
 			},
 		},

@@ -117,11 +117,14 @@ func (c *Client) getState(ctx context.Context, entityID string) (*haState, error
 
 // Fetch queries all configured entities in parallel and folds them into
 // "<weather>|<icon>|<presence>|<upstairs>|<downstairs>|<bedroom>", each
-// area field already formatted as "AREA · temp° [· OCC] [· LIT]" (kept
-// short — these render at a compact font size, and the device clips
-// rather than wraps text that overflows its box width). A failed
-// individual lookup degrades that one piece rather than failing the
-// whole scene — a single down entity shouldn't blank the whole card.
+// area field already formatted as "AREA · temp° [· OCCUPIED] [· LIGHTS
+// ON]" — the worst case (Downstairs with both flags) is 40 characters,
+// which the scene's area-row font size is sized to fit; the device
+// clips (rather than wraps) text that overflows its box width, so
+// don't grow this without also checking that row's FontSize/Width in
+// scene_homeassistant.go. A failed individual lookup degrades that one
+// piece rather than failing the whole scene — a single down entity
+// shouldn't blank the whole card.
 func (c *Client) Fetch(ctx context.Context) (string, error) {
 	var wg sync.WaitGroup
 	var presence, weatherText, icon string
@@ -246,7 +249,8 @@ func iconFor(condition string) string {
 }
 
 // fetchArea queries one area's climate, occupancy, and light group
-// concurrently and folds them into "AREA · temp° [· OCC] [· LIT]".
+// concurrently and folds them into "AREA · temp° [· OCCUPIED] [·
+// LIGHTS ON]".
 func (c *Client) fetchArea(ctx context.Context, a area) string {
 	var wg sync.WaitGroup
 	temp := "—"
@@ -289,10 +293,10 @@ func (c *Client) fetchArea(ctx context.Context, a area) string {
 
 	text := strings.ToUpper(a.name) + " · " + temp
 	if occupied {
-		text += " · OCC"
+		text += " · OCCUPIED"
 	}
 	if lightsOn {
-		text += " · LIT"
+		text += " · LIGHTS ON"
 	}
 	return text
 }
