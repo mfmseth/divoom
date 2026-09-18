@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/dragonpaw/divoom/internal/frame"
@@ -89,22 +88,13 @@ func timeColor(now time.Time) string {
 	return cOrange
 }
 
-// currentWeatherLine holds the most recently fetched "<CONDITION> ·
-// temp°" text (see haStashWeatherLine in scene_homeassistant.go),
-// shared between the homeassistant scene's OnActivate and alwaysOn.
-// alwaysOn has no access to widget data — it's a pure function of
-// `now` — so this is the bridge that lets it show live weather in the
-// idWeekend footer slot instead of the (now unused) weekend countdown.
-// A zero value (before the first fetch completes) renders as "".
-var currentWeatherLine atomic.Value // string
-
-func loadWeatherLine() string {
-	v, _ := currentWeatherLine.Load().(string)
-	return v
-}
-
 // alwaysOn builds the shared header every scene installs on top of its
-// own Elements — day name, big clock, and a date/weather footer row.
+// own Elements — day name, big clock, and the date footer row. The
+// footer used to have a second (weekend-countdown) half on its right,
+// dropped to free a Text slot: the homeassistant scene needs weather
+// and presence as two separate elements (each "its own thing," like
+// the clock), which pushes the scene to 5 Text elements -- 1 header +
+// 5 scene is the most this device's 6-Text cap allows.
 // Wired in via scene.Driver.AlwaysOn (see serve.go).
 func alwaysOn(now time.Time) []frame.DispElement {
 	return []frame.DispElement{
@@ -147,19 +137,6 @@ func alwaysOn(now time.Time) []frame.DispElement {
 				now.Format("2006-01-02"),
 				now.YearDay(),
 				isoWeek(now)),
-		},
-		// Right half of the footer row — live weather (see
-		// currentWeatherLine), right-aligned, clock-orange so it reads
-		// as part of the same header system as the clock above it.
-		{
-			ID: idWeekend, Type: "Text",
-			StartX: 40, StartY: 400, Width: 720, Height: 44,
-			Align:       1,
-			FontSize:    28,
-			FontID:      fontMono,
-			FontColor:   cOrange,
-			BgColor:     cBgHard,
-			TextMessage: loadWeatherLine(),
 		},
 	}
 }

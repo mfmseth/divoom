@@ -1,40 +1,26 @@
 package main
 
 import (
-	"strings"
-	"time"
-
 	"github.com/dragonpaw/divoom/internal/frame"
 	"github.com/dragonpaw/divoom/internal/scene"
 	"github.com/dragonpaw/divoom/internal/widget"
 )
 
-// mhAccent reuses the same orange the always-on clock (idTime) renders
-// in during the afternoon/evening (see timeColor/cOrange in scenes.go),
-// so the presence chip reads as part of the same visual system instead
-// of introducing a second accent color.
-const mhAccent = cOrange
-
-// "homeassistant" — a presence chip and one row per area (Upstairs /
-// Downstairs / Bedroom), each area row already folding that area's
-// climate, occupancy, and lights-on state into a single self-labeled
-// line. The widget emits
-// "<weather>|<icon>|<presence>|<upstairs>|<downstairs>|<bedroom>", with
-// each area field pre-formatted as "AREA · temp° [· OCC] [· LIT]" — kept
+// "homeassistant" — a big weather readout sized like the always-on
+// clock (its own thing, not sharing a line with anything else), and
+// one row per area (Upstairs / Downstairs / Bedroom), each area row
+// already folding that area's climate, occupancy, and lights-on state
+// into a single self-labeled line. The widget emits
+// "<weather>|<icon>|<presence>|<upstairs>|<downstairs>|<bedroom>" —
+// presence is fetched but not displayed (dropped per request; only
+// the area rows' OCC/LIT flags carry activity info now) — with each
+// area field pre-formatted as "AREA · temp° [· OCC] [· LIT]", kept
 // short since the device clips (rather than wraps) text that overflows
 // its box width.
 //
-// Weather doesn't get its own scene Text element — OnActivate stashes
-// it into currentWeatherLine (scenes.go), which alwaysOn reads into the
-// idWeekend footer slot next to the clock, so weather lives in the same
-// persistent header as the time/date instead of eating one of this
-// scene's own 4 Text slots. That keeps the scene+header total at
-// exactly 6 (2 header + 4 scene) with presence back to being its own
-// row — see the commit history around 2026-09-18 for why 5+2 silently
-// dropped whichever Text element landed last (device caps Text
-// elements at 6 total across header + scene).
-//
-//   - Presence: HOME or AWAY, filled in an accent-orange chip when HOME.
+//   - Weather: "<CONDITION> · temp°" alone, FontSize 65, clock-orange,
+//     no background fill — same plain style as the always-on clock,
+//     just its own row instead of sharing one with presence.
 //   - Area rows: plain text, one per area, in the order Upstairs /
 //     Downstairs / Bedroom.
 func homeAssistantScene(widgets map[string]widget.Widget) *scene.Scene {
@@ -55,37 +41,36 @@ func homeAssistantScene(widgets map[string]widget.Widget) *scene.Scene {
 		Elements: []frame.DispElement{
 			{
 				ID: idSceneMain, Type: "Text",
-				StartX: 60, StartY: 490, Width: 680, Height: 110,
-				Align: 2, FontSize: 90, FontID: fontProse,
-				FontColor: cFg, BgColor: cBgHard,
+				StartX: 40, StartY: 480, Width: 720, Height: 100,
+				Align: 2, FontSize: 65, FontID: fontMono,
+				FontColor: cOrange, BgColor: cBgHard,
 			},
 			{
 				ID: idSceneSub1, Type: "Text",
-				StartX: 60, StartY: 630, Width: 680, Height: 55,
-				Align: 0, FontSize: 30, FontID: fontMono,
+				StartX: 60, StartY: 650, Width: 680, Height: 60,
+				Align: 0, FontSize: 34, FontID: fontMono,
 				FontColor: cFg, BgColor: cBgHard,
 			},
 			{
 				ID: idSceneSub3, Type: "Text",
-				StartX: 60, StartY: 695, Width: 680, Height: 55,
-				Align: 0, FontSize: 30, FontID: fontMono,
+				StartX: 60, StartY: 725, Width: 680, Height: 60,
+				Align: 0, FontSize: 34, FontID: fontMono,
 				FontColor: cFg, BgColor: cBgHard,
 			},
 			{
 				ID: idSceneTitle, Type: "Text",
-				StartX: 60, StartY: 760, Width: 680, Height: 55,
-				Align: 0, FontSize: 30, FontID: fontMono,
+				StartX: 60, StartY: 800, Width: 680, Height: 60,
+				Align: 0, FontSize: 34, FontID: fontMono,
 				FontColor: cFg, BgColor: cBgHard,
 			},
 		},
 		Widget: widgets["homeassistant"],
 		Mounts: []scene.Mount{
-			{ID: idSceneMain, Format: haPresence},
+			{ID: idSceneMain, Format: pipeAt(0)},
 			{ID: idSceneSub1, Format: pipeAt(3)},
 			{ID: idSceneSub3, Format: pipeAt(4)},
 			{ID: idSceneTitle, Format: pipeAt(5)},
 		},
-		OnActivate: haOnActivate,
 	}
 }
 
@@ -97,28 +82,3 @@ const (
 	bgHomeAssistantRain = "/userdata/wallclock_bg_homeassistant_rain.jpg"
 	bgHomeAssistantSnow = "/userdata/wallclock_bg_homeassistant_snow.jpg"
 )
-
-func haPresence(raw string) (text, color string) {
-	return strings.ToUpper(weatherPipeField(raw, 2)), cFg
-}
-
-// haOnActivate does two things every activation: stashes the current
-// weather line into currentWeatherLine (scenes.go) so alwaysOn's next
-// build picks it up in the header, and fills idSceneMain's BgColor with
-// the accent when presence is HOME (swapping FontColor to the dark bg
-// color for contrast against that fill). AWAY keeps the default
-// text-on-hero-bg look set in the Elements above.
-func haOnActivate(_ time.Time, raw string, elements []frame.DispElement) {
-	currentWeatherLine.Store(weatherPipeField(raw, 0))
-
-	presence := weatherPipeField(raw, 2)
-	if presence != "HOME" {
-		return
-	}
-	for i := range elements {
-		if elements[i].ID == idSceneMain {
-			elements[i].BgColor = mhAccent
-			elements[i].FontColor = cBgHard
-		}
-	}
-}
