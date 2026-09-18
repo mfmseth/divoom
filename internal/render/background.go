@@ -2822,8 +2822,6 @@ func buildHeroImage(now time.Time) *image.RGBA {
 			&image.Uniform{GruvOrange}, image.Point{}, draw.Src)
 	}
 
-	drawMorseRule(img)
-
 	// Baked "> " prompt to the left of the day-of-week. The day name
 	// itself renders as a device Week element (built-in type — saves
 	// one Text slot, doesn't count against the 6-Text cap). The prompt
@@ -2840,51 +2838,6 @@ func buildHeroImage(now time.Time) *image.RGBA {
 	}
 
 	return img
-}
-
-// drawMorseRule paints a dashed separator at y=380 between the time and
-// the operator footer. Alternating 16px dashes with 4px gaps; every 5th
-// gap is replaced with a 2px dot so the line reads as a deliberate
-// rhythm break rather than uniform stippling.
-func drawMorseRule(img *image.RGBA) {
-	const (
-		y       = 380
-		thick   = 2
-		xStart  = 40
-		xEnd    = 760
-		dashW   = 16
-		gapW    = 4
-		dotW    = 2
-		dotEvery = 5 // every Nth gap becomes a dot
-	)
-	c := &image.Uniform{GruvFgDark}
-	x := xStart
-	gapIdx := 0
-	for x < xEnd {
-		// Dash
-		x1 := x + dashW
-		if x1 > xEnd {
-			x1 = xEnd
-		}
-		draw.Draw(img, image.Rect(x, y, x1, y+thick), c, image.Point{}, draw.Src)
-		x = x1
-		if x >= xEnd {
-			break
-		}
-		// Gap (with a dot painted into it on every Nth iteration)
-		gapIdx++
-		if gapIdx%dotEvery == 0 {
-			dotX := x + (gapW-dotW)/2
-			dotX1 := dotX + dotW
-			if dotX1 > xEnd {
-				dotX1 = xEnd
-			}
-			if dotX < xEnd {
-				draw.Draw(img, image.Rect(dotX, y, dotX1, y+thick), c, image.Point{}, draw.Src)
-			}
-		}
-		x += gapW
-	}
 }
 
 func isLeapYear(y int) bool {

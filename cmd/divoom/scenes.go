@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
@@ -71,13 +70,6 @@ var dayColors = map[time.Weekday]string{
 	time.Saturday:  cBlue,
 }
 
-// isoWeek returns the ISO 8601 week number for now (the second value of
-// time.Time.ISOWeek).
-func isoWeek(now time.Time) int {
-	_, w := now.ISOWeek()
-	return w
-}
-
 // timeColor returns the AM/PM accent for the always-on clock — cAqua
 // mornings, cOrange afternoons/evenings — so the clock reads warm or
 // cool at a glance.
@@ -123,20 +115,19 @@ func alwaysOn(now time.Time) []frame.DispElement {
 			FontColor: timeColor(now),
 			BgColor:   cBgHard,
 		},
-		// Left half of the footer row — date / day-of-year / iso-week,
-		// dim mono left-aligned.
+		// Date, right-aligned on the same row as the weekday (which
+		// sits on the left via the baked "> " prompt + idDay below) --
+		// opposite sides of one header row instead of a separate
+		// footer line. MM-DD-YYYY per request.
 		{
 			ID: idFooter, Type: "Text",
-			StartX: 40, StartY: 400, Width: 720, Height: 44,
-			Align:     0,
-			FontSize:  28,
-			FontID:    fontMono,
-			FontColor: cFgDark,
-			BgColor:   cBgHard,
-			TextMessage: fmt.Sprintf("%s  doy:%d  w:%d",
-				now.Format("2006-01-02"),
-				now.YearDay(),
-				isoWeek(now)),
+			StartX: 40, StartY: 30, Width: 720, Height: 80,
+			Align:       1,
+			FontSize:    40,
+			FontID:      fontMono,
+			FontColor:   cFgDark,
+			BgColor:     cBgHard,
+			TextMessage: now.Format("01-02-2006"),
 		},
 	}
 }
