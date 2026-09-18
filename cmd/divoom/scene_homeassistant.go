@@ -1,6 +1,9 @@
 package main
 
 import (
+	"strconv"
+	"strings"
+
 	"github.com/dragonpaw/divoom/internal/frame"
 	"github.com/dragonpaw/divoom/internal/scene"
 	"github.com/dragonpaw/divoom/internal/widget"
@@ -69,10 +72,71 @@ func homeAssistantScene(widgets map[string]widget.Widget) *scene.Scene {
 		Widget: widgets["homeassistant"],
 		Mounts: []scene.Mount{
 			{ID: idSceneMain, Format: pipeAt(0)},
-			{ID: idSceneSub1, Format: pipeAt(3)},
-			{ID: idSceneSub3, Format: pipeAt(4)},
-			{ID: idSceneTitle, Format: pipeAt(5)},
+			{ID: idSceneSub1, Format: areaRow(3)},
+			{ID: idSceneSub3, Format: areaRow(4)},
+			{ID: idSceneTitle, Format: areaRow(5)},
 		},
+	}
+}
+
+// areaRow returns a Mount.Format closure that picks segment i (one of
+// the pre-formatted "AREA · temp° [· OCCUPIED] [· LIGHTS ON]" strings)
+// and colors the whole line so activity/temperature reads at a glance
+// without having to parse the words:
+//
+//   - OCCUPIED or LIGHTS ON present → accent orange, so any activity
+//     in that area jumps out regardless of temperature.
+//   - Otherwise → banded by temperature, same comfort logic the old
+//     weather scene used: cold blue-ish (cAqua), comfortable green,
+//     warm yellow, hot red.
+//
+// A single Text element only carries one color for its whole string —
+// there's no way to tint just the temperature or just "OCCUPIED"
+// differently within one line — so this picks the single most useful
+// signal per row instead.
+func areaRow(i int) func(raw string) (text, color string) {
+	return func(raw string) (text, color string) {
+		text = weatherPipeField(raw, i)
+		if text == "" {
+			return "", ""
+		}
+		if strings.Contains(text, "OCCUPIED") || strings.Contains(text, "LIGHTS ON") {
+			return text, cOrange
+		}
+		return text, areaTempColor(text)
+	}
+}
+
+// areaTempColor pulls the integer temperature out of an "AREA · temp°
+// ..." string (the digits immediately before the first "°") and bands
+// it into a comfort color. Defensive: any parse failure (missing °,
+// non-numeric prefix) falls back to the quiet default cFg rather than
+// guessing.
+func areaTempColor(text string) string {
+	idx := strings.IndexRune(text, '°')
+	if idx < 0 {
+		return cFg
+	}
+	start := idx
+	for start > 0 && text[start-1] >= '0' && text[start-1] <= '9' {
+		start--
+	}
+	if start == idx {
+		return cFg
+	}
+	n, err := strconv.Atoi(text[start:idx])
+	if err != nil {
+		return cFg
+	}
+	switch {
+	case n < 60:
+		return cAqua
+	case n <= 75:
+		return cGreen
+	case n <= 82:
+		return cYellow
+	default:
+		return cRed
 	}
 }
 
