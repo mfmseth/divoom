@@ -123,7 +123,7 @@ func alwaysOn(now time.Time) []frame.DispElement {
 			ID: idFooter, Type: "Text",
 			StartX: 40, StartY: 30, Width: 720, Height: 80,
 			Align:       1,
-			FontSize:    40,
+			FontSize:    64,
 			FontID:      fontMono,
 			FontColor:   cFgDark,
 			BgColor:     cBgHard,
