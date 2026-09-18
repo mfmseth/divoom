@@ -126,6 +126,9 @@ USB-attached frame without a separate dev-box step.
   maintenance over implementation, keep pieces small, no speculative
   generality.
 
-Everything else under `docs/` (`deploy.md`, `scene-rules.md`,
-`docs/screenshots/`) documents the upstream multi-scene project this fork
-no longer resembles — left in place for now but not maintained here.
+`docs/fonts.md` + `docs/fonts.json` document the Times Frame font
+catalog, and `docs/decisions/` holds unrelated repo-wide engineering
+decisions — both still accurate and referenced from `docs/api.md`. The
+upstream multi-scene project's deploy docs, scene-authoring rules, and
+per-scene screenshots (plus the parser scripts that generated the
+quote/dictionary widgets) were deleted along with the scenes themselves.
