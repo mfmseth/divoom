@@ -67,7 +67,7 @@ func homeAssistantScene(widgets map[string]widget.Widget) *scene.Scene {
 				FontColor: cFg, BgColor: cBgHard,
 			},
 			{
-				ID: idSceneSub4, Type: "Text",
+				ID: idSceneSub3, Type: "Text",
 				StartX: 60, StartY: 765, Width: 680, Height: 55,
 				Align: 0, FontSize: 30, FontID: fontMono,
 				FontColor: cFg, BgColor: cBgHard,
@@ -84,16 +84,12 @@ func homeAssistantScene(widgets map[string]widget.Widget) *scene.Scene {
 			{ID: idSceneSub2, Format: pipeAt(0)},
 			{ID: idSceneMain, Format: haPresence},
 			{ID: idSceneSub1, Format: pipeAt(3)},
-			{ID: idSceneSub4, Format: pipeAt(4)},
+			{ID: idSceneSub3, Format: pipeAt(4)},
 			{ID: idSceneTitle, Format: pipeAt(5)},
 		},
 		OnActivate: haChipColorize,
 	}
 }
-
-// idSceneSub4 is a fourth "sub" Text slot, alongside the shared
-// idSceneSub1-3 pool in scenes.go.
-const idSceneSub4 = 14
 
 // On-device bg paths for this scene. Three variants -- plain, rain-icon,
 // snow-icon -- all pre-pushed at startup; the scene's BgPathFor picks
