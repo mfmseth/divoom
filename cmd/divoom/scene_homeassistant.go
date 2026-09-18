@@ -54,8 +54,8 @@ func homeAssistantScene(widgets map[string]widget.Widget) *scene.Scene {
 			{
 				ID: idSceneMain, Type: "Text",
 				StartX: 60, StartY: 540, Width: 680, Height: 60,
-				Align: 0, FontSize: 40, FontID: fontMono,
-				FontColor: cFg, BgColor: cBgHard,
+				Align: 2, FontSize: 40, FontID: fontMono,
+				FontColor: cOrange, BgColor: cBgHard,
 			},
 			{
 				ID: idSceneSub1, Type: "Text",
@@ -99,7 +99,7 @@ const (
 func haWeatherAndPresence(raw string) (text, color string) {
 	weather := weatherPipeField(raw, 0)
 	presence := strings.ToUpper(weatherPipeField(raw, 2))
-	return weather + " · " + presence, cFg
+	return weather + " · " + presence, cOrange
 }
 
 // haChipColorize fills idSceneMain's BgColor with the accent when
