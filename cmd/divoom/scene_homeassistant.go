@@ -15,21 +15,24 @@ import (
 // of introducing a second accent color.
 const mhAccent = cOrange
 
-// "homeassistant" — a top weather row, a compact presence chip, and one
-// row per area (Upstairs / Downstairs / Bedroom), each area row already
-// folding that area's climate, occupancy, and lights-on state into a
-// single self-labeled line. The widget emits
+// "homeassistant" — a combined weather+presence row, and one row per
+// area (Upstairs / Downstairs / Bedroom), each area row already folding
+// that area's climate, occupancy, and lights-on state into a single
+// self-labeled line. The widget emits
 // "<weather>|<icon>|<presence>|<upstairs>|<downstairs>|<bedroom>", with
 // each area field pre-formatted as "AREA · temp° [· OCC] [· LIT]" — kept
 // short since the device clips (rather than wraps) text that overflows
 // its box width.
 //
-//   - Weather: "<CONDITION> · temp°", with a rain/snow cloud icon baked
-//     into the bg (via BgPathFor) when today's forecast calls for it.
-//   - Presence: HOME or AWAY, filled in an accent-orange chip when HOME.
-//     Deliberately small (FontSize 70, not a giant hero number) so it
-//     reads as one line among the others instead of a big gap-creating
-//     block between weather and the area rows.
+// Weather and presence share ONE Text element (not two) on purpose: the
+// device's AlwaysOn header already spends 2 of its 6-Text budget on the
+// date/weekend footer, so 4 scene rows is the most this scene can use —
+// a 5th (weather and presence as separate rows) silently dropped
+// whichever Text element landed last in the install (Bedroom), since
+// the always-on elements are prepended ahead of the scene's own.
+//
+//   - Weather + presence: "<CONDITION> · temp° · HOME", filled in an
+//     accent-orange chip when presence is HOME.
 //   - Area rows: plain text, one per area, in the order Upstairs /
 //     Downstairs / Bedroom.
 func homeAssistantScene(widgets map[string]widget.Widget) *scene.Scene {
@@ -49,40 +52,33 @@ func homeAssistantScene(widgets map[string]widget.Widget) *scene.Scene {
 		},
 		Elements: []frame.DispElement{
 			{
-				ID: idSceneSub2, Type: "Text",
-				StartX: 80, StartY: 520, Width: 500, Height: 50,
+				ID: idSceneMain, Type: "Text",
+				StartX: 60, StartY: 540, Width: 680, Height: 60,
 				Align: 0, FontSize: 40, FontID: fontMono,
 				FontColor: cFg, BgColor: cBgHard,
 			},
 			{
-				ID: idSceneMain, Type: "Text",
-				StartX: 80, StartY: 580, Width: 640, Height: 90,
-				Align: 2, FontSize: 70, FontID: fontProse,
-				FontColor: cFg, BgColor: cBgHard,
-			},
-			{
 				ID: idSceneSub1, Type: "Text",
-				StartX: 60, StartY: 700, Width: 680, Height: 55,
+				StartX: 60, StartY: 680, Width: 680, Height: 55,
 				Align: 0, FontSize: 30, FontID: fontMono,
 				FontColor: cFg, BgColor: cBgHard,
 			},
 			{
 				ID: idSceneSub3, Type: "Text",
-				StartX: 60, StartY: 765, Width: 680, Height: 55,
+				StartX: 60, StartY: 745, Width: 680, Height: 55,
 				Align: 0, FontSize: 30, FontID: fontMono,
 				FontColor: cFg, BgColor: cBgHard,
 			},
 			{
 				ID: idSceneTitle, Type: "Text",
-				StartX: 60, StartY: 830, Width: 680, Height: 55,
+				StartX: 60, StartY: 810, Width: 680, Height: 55,
 				Align: 0, FontSize: 30, FontID: fontMono,
 				FontColor: cFg, BgColor: cBgHard,
 			},
 		},
 		Widget: widgets["homeassistant"],
 		Mounts: []scene.Mount{
-			{ID: idSceneSub2, Format: pipeAt(0)},
-			{ID: idSceneMain, Format: haPresence},
+			{ID: idSceneMain, Format: haWeatherAndPresence},
 			{ID: idSceneSub1, Format: pipeAt(3)},
 			{ID: idSceneSub3, Format: pipeAt(4)},
 			{ID: idSceneTitle, Format: pipeAt(5)},
@@ -100,8 +96,10 @@ const (
 	bgHomeAssistantSnow = "/userdata/wallclock_bg_homeassistant_snow.jpg"
 )
 
-func haPresence(raw string) (text, color string) {
-	return strings.ToUpper(weatherPipeField(raw, 2)), cFg
+func haWeatherAndPresence(raw string) (text, color string) {
+	weather := weatherPipeField(raw, 0)
+	presence := strings.ToUpper(weatherPipeField(raw, 2))
+	return weather + " · " + presence, cFg
 }
 
 // haChipColorize fills idSceneMain's BgColor with the accent when
