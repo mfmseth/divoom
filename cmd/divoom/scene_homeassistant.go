@@ -15,17 +15,21 @@ import (
 // of introducing a second accent color.
 const mhAccent = cOrange
 
-// "homeassistant" — a top weather row, presence, and one row per area
-// (Upstairs / Downstairs / Bedroom), each area row already folding that
-// area's climate, occupancy, and lights-on state into a single
-// self-labeled line. The widget emits
+// "homeassistant" — a top weather row, a compact presence chip, and one
+// row per area (Upstairs / Downstairs / Bedroom), each area row already
+// folding that area's climate, occupancy, and lights-on state into a
+// single self-labeled line. The widget emits
 // "<weather>|<icon>|<presence>|<upstairs>|<downstairs>|<bedroom>", with
-// each area field pre-formatted as "AREA · temp° [· OCCUPIED] [· LIGHTS
-// ON]".
+// each area field pre-formatted as "AREA · temp° [· OCC] [· LIT]" — kept
+// short since the device clips (rather than wraps) text that overflows
+// its box width.
 //
 //   - Weather: "<CONDITION> · temp°", with a rain/snow cloud icon baked
 //     into the bg (via BgPathFor) when today's forecast calls for it.
 //   - Presence: HOME or AWAY, filled in an accent-orange chip when HOME.
+//     Deliberately small (FontSize 70, not a giant hero number) so it
+//     reads as one line among the others instead of a big gap-creating
+//     block between weather and the area rows.
 //   - Area rows: plain text, one per area, in the order Upstairs /
 //     Downstairs / Bedroom.
 func homeAssistantScene(widgets map[string]widget.Widget) *scene.Scene {
@@ -52,26 +56,26 @@ func homeAssistantScene(widgets map[string]widget.Widget) *scene.Scene {
 			},
 			{
 				ID: idSceneMain, Type: "Text",
-				StartX: 80, StartY: 580, Width: 640, Height: 170,
-				Align: 2, FontSize: 140, FontID: fontProse,
+				StartX: 80, StartY: 580, Width: 640, Height: 90,
+				Align: 2, FontSize: 70, FontID: fontProse,
 				FontColor: cFg, BgColor: cBgHard,
 			},
 			{
 				ID: idSceneSub1, Type: "Text",
-				StartX: 80, StartY: 780, Width: 640, Height: 60,
-				Align: 0, FontSize: 38, FontID: fontMono,
+				StartX: 60, StartY: 700, Width: 680, Height: 55,
+				Align: 0, FontSize: 30, FontID: fontMono,
 				FontColor: cFg, BgColor: cBgHard,
 			},
 			{
 				ID: idSceneSub4, Type: "Text",
-				StartX: 80, StartY: 855, Width: 640, Height: 60,
-				Align: 0, FontSize: 38, FontID: fontMono,
+				StartX: 60, StartY: 765, Width: 680, Height: 55,
+				Align: 0, FontSize: 30, FontID: fontMono,
 				FontColor: cFg, BgColor: cBgHard,
 			},
 			{
 				ID: idSceneTitle, Type: "Text",
-				StartX: 80, StartY: 930, Width: 640, Height: 60,
-				Align: 0, FontSize: 38, FontID: fontMono,
+				StartX: 60, StartY: 830, Width: 680, Height: 55,
+				Align: 0, FontSize: 30, FontID: fontMono,
 				FontColor: cFg, BgColor: cBgHard,
 			},
 		},
