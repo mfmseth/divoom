@@ -46,31 +46,31 @@ func homeAssistantScene(widgets map[string]widget.Widget) *scene.Scene {
 		Elements: []frame.DispElement{
 			{
 				ID: idSceneSub2, Type: "Text",
-				StartX: 80, StartY: 520, Width: 500, Height: 60,
+				StartX: 80, StartY: 520, Width: 500, Height: 50,
 				Align: 0, FontSize: 40, FontID: fontMono,
 				FontColor: cFg, BgColor: cBgHard,
 			},
 			{
 				ID: idSceneMain, Type: "Text",
-				StartX: 80, StartY: 600, Width: 640, Height: 180,
+				StartX: 80, StartY: 580, Width: 640, Height: 170,
 				Align: 2, FontSize: 140, FontID: fontProse,
 				FontColor: cFg, BgColor: cBgHard,
 			},
 			{
 				ID: idSceneSub1, Type: "Text",
-				StartX: 80, StartY: 860, Width: 640, Height: 70,
+				StartX: 80, StartY: 780, Width: 640, Height: 60,
 				Align: 0, FontSize: 38, FontID: fontMono,
 				FontColor: cFg, BgColor: cBgHard,
 			},
 			{
 				ID: idSceneSub4, Type: "Text",
-				StartX: 80, StartY: 1000, Width: 640, Height: 70,
+				StartX: 80, StartY: 855, Width: 640, Height: 60,
 				Align: 0, FontSize: 38, FontID: fontMono,
 				FontColor: cFg, BgColor: cBgHard,
 			},
 			{
 				ID: idSceneTitle, Type: "Text",
-				StartX: 80, StartY: 1140, Width: 640, Height: 70,
+				StartX: 80, StartY: 930, Width: 640, Height: 60,
 				Align: 0, FontSize: 38, FontID: fontMono,
 				FontColor: cFg, BgColor: cBgHard,
 			},
