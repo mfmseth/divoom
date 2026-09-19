@@ -16,23 +16,26 @@ import (
 // Per docs/api.md "Custom font workflow": each TTF is pushed to the
 // device's font cache as `<catalog_id+1>.bin`, then the matching
 // `font_list.cfg` registers the catalog ID so divoom_app finds it on
-// startup. Three custom fonts, hardcoded — they are the scenes' only
-// non-stock typography.
+// startup. One custom font, hardcoded -- the scene's only non-stock
+// typography (single-family per the Modernist-pairing design review;
+// see scripts/download-fonts.sh). Reuses catalog ID 7 -- previously
+// Iosevka's slot -- rather than registering a new ID: this codebase
+// has already hit one hardware bug from a novel, never-before-used ID
+// (see the commit history around 2026-09-18, an *element* ID that
+// silently broke rendering), and font catalog IDs are the same kind of
+// device-side-cached, easy-to-get-wrong identifier.
 type customFont struct {
-	src      string // basename under ./fonts/
-	devSlot  string // absolute path on device
-	fontID   int    // catalog ID referenced from scenes.go
+	src     string // basename under ./fonts/
+	devSlot string // absolute path on device
+	fontID  int    // catalog ID referenced from scenes.go
 }
 
 var customFonts = []customFont{
-	{src: "Iosevka-Regular.ttf", devSlot: "/usr/share/divoom_app/divoom/21/8.bin", fontID: 7},
-	{src: "RobotoCondensed-Regular.ttf", devSlot: "/usr/share/divoom_app/divoom/21/10.bin", fontID: 9},
-	{src: "RobotoCondensed-Light.ttf", devSlot: "/usr/share/divoom_app/divoom/21/12.bin", fontID: 11},
-	{src: "RobotoCondensed-Black.ttf", devSlot: "/usr/share/divoom_app/divoom/21/14.bin", fontID: 13},
+	{src: "ArchivoBlack-Regular.ttf", devSlot: "/usr/share/divoom_app/divoom/21/8.bin", fontID: 7},
 }
 
 const (
-	// Pre-built font_list.cfg with the three custom entries spliced in.
+	// Pre-built font_list.cfg with the custom entry spliced in.
 	// Checked into the repo so we never mutate the on-device cfg in
 	// place (see feedback_device_init_modifications: build the exact
 	// bytes locally, push them).
@@ -51,7 +54,7 @@ func runPush(ctx context.Context) error {
 	return pushFonts(ctx)
 }
 
-// pushFonts installs the three custom TTFs and the matching
+// pushFonts installs the custom TTF and the matching
 // font_list.cfg, then triggers the daemon-reload crash-restart so
 // divoom_app re-reads the cfg. The frame restarts at the end — `push`
 // is the slow path, run from the USB-attached dev box only.

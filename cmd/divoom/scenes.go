@@ -35,13 +35,13 @@ const (
 // constant for clarity over a bare literal.
 const WeightInformational = 40
 
-// Font IDs on the device. Custom-pushed via adb (see docs/api.md →
-// "Fonts on disk"). Iosevka for digits/mono rows, Roboto Condensed for
-// prose.
-const (
-	fontMono  = 7 // Iosevka — numbers, mono rows
-	fontProse = 9 // Roboto Condensed — labels, prose
-)
+// fontMono is the device font ID for Archivo Black, this scene's only
+// non-stock typography -- single family per the Modernist-pairing
+// design review, used at multiple sizes rather than multiple weights
+// (custom-pushed via adb; see docs/api.md "Fonts on disk" and
+// scripts/download-fonts.sh for why it's a standalone static weight
+// rather than an instance of the variable Archivo[wdth,wght] font).
+const fontMono = 7
 
 // Gruvbox semantic colors. Reds and greens signal direction (down/up);
 // yellow / blue / aqua signal weather conditions; fg / fg-dark are quiet.
