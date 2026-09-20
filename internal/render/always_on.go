@@ -60,13 +60,13 @@ func bakeAlwaysOnHeader(img *image.RGBA, now time.Time) error {
 		return fmt.Errorf("load extrabold: %w", err)
 	}
 	timeFace, err := opentype.NewFace(extrabold, &opentype.FaceOptions{
-		Size: 169, DPI: 72, Hinting: font.HintingFull,
+		Size: 140, DPI: 72, Hinting: font.HintingFull,
 	})
 	if err != nil {
 		return err
 	}
 	defer timeFace.Close()
-	drawLabelCentered(img, now.Format("15:04"), timeFace, CanvasW/2, 330, haNeutral100)
+	drawLabelCentered(img, now.Format("3:04 PM"), timeFace, CanvasW/2, 330, haNeutral100)
 
 	return nil
 }

@@ -67,6 +67,17 @@ const (
 // Wired in via scene.Driver.AlwaysOn (see serve.go). Letter-spacing from
 // the design review (0.02-0.04em) has no device-API equivalent and is
 // skipped.
+//
+// The clock is a custom Text element, not the device's built-in Time
+// type: the built-in clock self-updates but a live test against the
+// frame confirmed its 12-hour mode shows no AM/PM indicator at all
+// (device firmware limitation) -- there's no way to get AM/PM out of
+// it. Rendering the time ourselves means it only refreshes on each
+// scene reinstall (~3 min, same cadence as everything else in this
+// scene) rather than every second, a tradeoff accepted in exchange for
+// the simpler change. FontSize dropped from the bare-digits 169 to 140
+// -- "12:32 PM" (the widest case) measures ~651px at 140 in Archivo
+// ExtraBold, fitting the 700px box; 169 would have clipped it.
 func alwaysOn(now time.Time) []frame.DispElement {
 	return []frame.DispElement{
 		{
@@ -80,13 +91,14 @@ func alwaysOn(now time.Time) []frame.DispElement {
 			TextMessage: strings.ToUpper(now.Weekday().String()) + " · " + now.Format("01-02-2006"),
 		},
 		{
-			ID: idTime, Type: "Time",
+			ID: idTime, Type: "Text",
 			StartX: 50, StartY: 165, Width: 700, Height: 200,
-			Align:     2,
-			FontSize:  169,
-			FontID:    fontArchivoExtraBold,
-			FontColor: cHaNeutral100,
-			BgColor:   cHaNeutral900,
+			Align:       2,
+			FontSize:    140,
+			FontID:      fontArchivoExtraBold,
+			FontColor:   cHaNeutral100,
+			BgColor:     cHaNeutral900,
+			TextMessage: now.Format("3:04 PM"),
 		},
 	}
 }
