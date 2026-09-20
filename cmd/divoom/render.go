@@ -43,9 +43,12 @@ func runRender(args []string) error {
 		{name: "hero", render: func() ([]byte, error) {
 			return render.HeroBackground(render.FormatJPEG, now)
 		}},
-		// The one scene the daemon pushes via adb.
+		// The one scene the daemon pushes via adb. Calls the same
+		// production function pushSceneBackgrounds uses (not the
+		// generic SceneBackground preview dispatcher), so this
+		// screenshot actually reflects what gets installed.
 		{name: "scene-homeassistant", render: func() ([]byte, error) {
-			return render.SceneBackground(render.SceneHomeAssistant, render.FormatJPEG, now)
+			return render.SceneHomeAssistantBackground("", render.FormatJPEG)
 		}},
 	}
 

@@ -1,12 +1,12 @@
 // Package homeassistant queries a Home Assistant instance's REST API,
-// grouped by area (Upstairs / Downstairs / Bedroom), and emits a
-// pipe-separated
-// "<weather text>|<icon>|<presence>|<upstairs>|<downstairs>|<bedroom>"
+// grouped by area (Upstairs / Downstairs / Bedroom / Garage), and emits
+// a pipe-separated
+// "<weather text>|<icon>|<presence>|<upstairs>|<downstairs>|<bedroom>|<garage>"
 // string for the homeassistant scene. Each area field is
 // "AREA · temp°@FLAGS" — a short display text plus a hidden "@FLAGS"
-// suffix (comma-joined OCC/LIT, or empty) the scene uses only to color
-// the row, never displays — see fetchArea. icon is "rain", "snow", or
-// "" depending on today's forecast.
+// suffix ("OCC" or empty) the scene uses only to decide whether to show
+// an occupancy mark, never displays — see fetchArea. icon is "rain",
+// "snow", or "" depending on today's forecast.
 package homeassistant
 
 import (
@@ -21,14 +21,15 @@ import (
 )
 
 // area bundles the entities that make up one grouped row: a climate
-// entity for the temperature reading, an occupancy sensor, and the
-// individual lights physically in that area (whose on/off states get
-// folded into one "lights on" flag for the row).
+// entity for the temperature reading and an occupancy sensor. Either
+// may be "" when the area has no backing entity (e.g. Garage, which
+// this home has no climate/occupancy sensors for yet) — fetchArea skips
+// a "" entity rather than querying it, so the row always renders
+// offline instead of firing a request that can only 404.
 type area struct {
-	name        string
-	climate     string
-	occupancy   string
-	lightGroup  []string
+	name      string
+	climate   string
+	occupancy string
 }
 
 // Client hits a fixed Home Assistant instance's REST API for a fixed set
@@ -47,7 +48,7 @@ type Client struct {
 // New builds a Client against baseURL (e.g. "http://10.0.0.7:8123") using
 // token as a Home Assistant long-lived access token (profile > Security >
 // Long-Lived Access Tokens in the HA UI). The entity set is fixed to this
-// home's presence group and three areas — not configurable via env, same
+// home's presence group and four areas — not configurable via env, same
 // tradeoff as the hnKeywords list in serve.go.
 func New(baseURL, token string) *Client {
 	return &Client{
@@ -61,28 +62,21 @@ func New(baseURL, token string) *Client {
 				name:      "Upstairs",
 				climate:   "climate.upstairs",
 				occupancy: "binary_sensor.upstairs_occupancy_group",
-				lightGroup: []string{
-					"light.kitchen_ceiling_lights",
-					"light.entryway_ceiling_lights",
-					"light.upstairs_bathroom",
-				},
 			},
 			{
 				name:      "Downstairs",
 				climate:   "climate.downstairs",
 				occupancy: "binary_sensor.downstairs_occupancy_group",
-				lightGroup: []string{
-					"light.living_room",
-					"light.office",
-					"light.stairs_main_lights_2",
-					"light.downstairs",
-				},
 			},
 			{
-				name:       "Bedroom",
-				climate:    "climate.bedroom",
-				occupancy:  "binary_sensor.bedroom_occupancy",
-				lightGroup: []string{"light.bedroom_3"},
+				name:      "Bedroom",
+				climate:   "climate.bedroom",
+				occupancy: "binary_sensor.bedroom_occupancy",
+			},
+			{
+				// No climate/occupancy entities exist for this area
+				// yet — always renders offline. See the area doc comment.
+				name: "Garage",
 			},
 		},
 	}
@@ -118,12 +112,12 @@ func (c *Client) getState(ctx context.Context, entityID string) (*haState, error
 }
 
 // Fetch queries all configured entities in parallel and folds them into
-// "<weather>|<icon>|<presence>|<upstairs>|<downstairs>|<bedroom>", each
-// area field formatted as "AREA · temp°@FLAGS" (see fetchArea — the
-// scene splits off "@FLAGS" for coloring and never displays it). A
-// failed individual lookup degrades that one piece rather than failing
-// the whole scene — a single down entity shouldn't blank the whole
-// card.
+// "<weather>|<icon>|<presence>|<upstairs>|<downstairs>|<bedroom>|<garage>",
+// each area field formatted as "AREA · temp°@FLAGS" (see fetchArea — the
+// scene splits off "@FLAGS" to decide the occupancy mark and never
+// displays it). A failed individual lookup degrades that one piece
+// rather than failing the whole scene — a single down entity shouldn't
+// blank the whole card.
 func (c *Client) Fetch(ctx context.Context) (string, error) {
 	var wg sync.WaitGroup
 	var presence, weatherText, icon string
@@ -247,60 +241,49 @@ func iconFor(condition string) string {
 	}
 }
 
-// fetchArea queries one area's climate, occupancy, and light group
+// fetchArea queries one area's climate and occupancy entities
 // concurrently and folds them into "AREA · temp°@FLAGS" -- the "@FLAGS"
-// suffix (comma-joined "OCC"/"LIT", or empty) is a hidden sub-field the
-// scene strips before display and uses only to pick the row's color;
-// keeping the visible text to just "AREA · temp°" is what lets the
-// area rows render at a much larger, farther-readable font size than
-// spelling out OCCUPIED/LIGHTS ON would allow.
+// suffix ("OCC" or empty) is a hidden sub-field the scene strips before
+// display and uses only to decide whether to show an occupancy mark. An
+// empty entity ID (an area with no backing sensor, e.g. Garage) is
+// skipped rather than queried, so temp stays "—" and occupied stays
+// false without firing a request that can only fail.
 func (c *Client) fetchArea(ctx context.Context, a area) string {
 	var wg sync.WaitGroup
 	temp := "—"
-	var occupied, lightsOn bool
+	var occupied bool
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		s, err := c.getState(ctx, a.climate)
-		if err != nil || s == nil {
-			return
-		}
-		if t, ok := s.Attributes["current_temperature"].(float64); ok {
-			temp = strconv.Itoa(int(t)) + "°"
-		}
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		s, err := c.getState(ctx, a.occupancy)
-		if err == nil && s != nil && s.State == "on" {
-			occupied = true
-		}
-	}()
-
-	for _, entityID := range a.lightGroup {
-		entityID := entityID
+	if a.climate != "" {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			s, err := c.getState(ctx, entityID)
+			s, err := c.getState(ctx, a.climate)
+			if err != nil || s == nil {
+				return
+			}
+			if t, ok := s.Attributes["current_temperature"].(float64); ok {
+				temp = strconv.Itoa(int(t)) + "°"
+			}
+		}()
+	}
+
+	if a.occupancy != "" {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			s, err := c.getState(ctx, a.occupancy)
 			if err == nil && s != nil && s.State == "on" {
-				lightsOn = true
+				occupied = true
 			}
 		}()
 	}
 
 	wg.Wait()
 
-	var flags []string
+	flags := ""
 	if occupied {
-		flags = append(flags, "OCC")
-	}
-	if lightsOn {
-		flags = append(flags, "LIT")
+		flags = "OCC"
 	}
 	text := strings.ToUpper(a.name) + " · " + temp
-	return text + "@" + strings.Join(flags, ",")
+	return text + "@" + flags
 }

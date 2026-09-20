@@ -2,36 +2,74 @@ package main
 
 import (
 	"strings"
+	"time"
 
 	"github.com/dragonpaw/divoom/internal/frame"
+	"github.com/dragonpaw/divoom/internal/render"
 	"github.com/dragonpaw/divoom/internal/scene"
 	"github.com/dragonpaw/divoom/internal/widget"
 )
 
-// "homeassistant" — a big weather readout and three big area rows
-// (Upstairs / Downstairs / Bedroom), all sized like the always-on
-// clock: this is a 10.1" display meant to be read from across a room,
-// so every row gets the same "its own big thing" treatment rather than
-// small dense text. Flush-left (not centered) and colored with a
-// single reserved accent per the Modernist-pairing design review — see
-// areaRow. The widget emits
-// "<weather>|<icon>|<presence>|<upstairs>|<downstairs>|<bedroom>" —
-// presence is fetched but not displayed (dropped per request). Each
-// area field is "AREA · temp°@FLAGS": the "@FLAGS" suffix is stripped
-// before display and used only to color the row, never shown — that's
-// what keeps the visible text down to ~14-17 characters, short enough
-// to render at FontSize 65 without the device clipping it (it clips
-// rather than wraps text that overflows its box width).
+// "homeassistant" — header (weekday+date) and clock from alwaysOn, then
+// a weather row and four room rows (Upstairs / Downstairs / Bedroom /
+// Garage), per the wallclock-scene design review: one Archivo family,
+// one reserved accent (occupancy only), centered throughout. The widget
+// emits "<weather>|<icon>|<presence>|<upstairs>|<downstairs>|<bedroom>|
+// <garage>" — presence is fetched but not displayed (pre-existing,
+// unrelated to this scene's layout). Each room field is
+// "AREA · temp°@FLAGS": the "@FLAGS" suffix is stripped before display
+// and used only to decide whether that room's occupancy mark shows.
 //
-//   - Weather: "<CONDITION> · temp°" alone, FontSize 65, clock-orange,
-//     no background fill — same plain style as the always-on clock;
-//     this is the scene's own hero/identity color, not the activity
-//     accent (see areaRow).
-//   - Area rows: "AREA · temp°", FontSize 65, flush-left, orange only
-//     when that area is occupied or has a light on (the one reserved
-//     accent for activity), otherwise the plain neutral foreground —
-//     one per area in the order Upstairs / Downstairs / Bedroom.
+// Occupancy used to recolor the whole row; the design review replaces
+// that with a small accent-colored square prepended to the room name
+// (see haRoomY / OnActivate below) so the accent stays reserved for
+// activity instead of doubling as a temperature-reading color. A Text
+// element only has one FontColor for its whole string, so the mark has
+// to be a separate Image element positioned next to the (centered, and
+// therefore width-varying) room text — computed fresh each activation
+// with render.MeasureLabel, the same technique already used to align a
+// dynamic value after baked text in other scenes.
 func homeAssistantScene(widgets map[string]widget.Widget) *scene.Scene {
+	elements := []frame.DispElement{
+		{
+			ID: idSceneWeather, Type: "Text",
+			StartX: 40, StartY: 393, Width: 720, Height: 56,
+			Align: 2, FontSize: 47, FontID: fontArchivoSemiBold,
+			FontColor: cHaNeutral400, BgColor: cHaNeutral900,
+		},
+	}
+	for i, y := range haRoomY {
+		elements = append(elements, frame.DispElement{
+			ID: idSceneRoomBase + i, Type: "Text",
+			StartX: 40, StartY: y, Width: 720, Height: haRoomHeight,
+			Align: 2, FontSize: 61, FontID: fontArchivoSemiBold,
+			FontColor: cHaNeutral100, BgColor: cHaNeutral900,
+		})
+	}
+	for i, y := range haRoomY {
+		elements = append(elements, frame.DispElement{
+			// Parked off-canvas by default; OnActivate below moves it
+			// on-screen only for an occupied room. Font/Color fields
+			// are semantically meaningless for Image elements but
+			// required anyway -- see docs/api.md "Image DispElements
+			// require Font/Color fields even though they're
+			// semantically meaningless for images".
+			ID: idSceneMarkBase + i, Type: "Image",
+			StartX: haMarkOffscreenX, StartY: y + (haRoomHeight-haMarkSize)/2,
+			Width: haMarkSize, Height: haMarkSize,
+			Url: haOccupancyMarkPath, ImgLocalFlag: 1,
+			FontSize: 1, FontID: fontArchivoSemiBold,
+			FontColor: cHaNeutral100, BgColor: cHaNeutral900,
+		})
+	}
+
+	mounts := []scene.Mount{
+		{ID: idSceneWeather, Format: pipeAt(0)},
+	}
+	for i := range haRoomY {
+		mounts = append(mounts, scene.Mount{ID: idSceneRoomBase + i, Format: roomRow(3 + i)})
+	}
+
 	return &scene.Scene{
 		Name:   "homeassistant",
 		Weight: WeightInformational,
@@ -46,63 +84,97 @@ func homeAssistantScene(widgets map[string]widget.Widget) *scene.Scene {
 				return bgHomeAssistant
 			}
 		},
-		Elements: []frame.DispElement{
-			{
-				ID: idSceneMain, Type: "Text",
-				StartX: 40, StartY: 480, Width: 720, Height: 100,
-				Align: 0, FontSize: 65, FontID: fontMono,
-				FontColor: cOrange, BgColor: cBgHard,
-			},
-			{
-				ID: idSceneSub1, Type: "Text",
-				StartX: 40, StartY: 610, Width: 720, Height: 90,
-				Align: 0, FontSize: 65, FontID: fontMono,
-				FontColor: cFg, BgColor: cBgHard,
-			},
-			{
-				ID: idSceneSub3, Type: "Text",
-				StartX: 40, StartY: 730, Width: 720, Height: 90,
-				Align: 0, FontSize: 65, FontID: fontMono,
-				FontColor: cFg, BgColor: cBgHard,
-			},
-			{
-				ID: idSceneTitle, Type: "Text",
-				StartX: 40, StartY: 850, Width: 720, Height: 90,
-				Align: 0, FontSize: 65, FontID: fontMono,
-				FontColor: cFg, BgColor: cBgHard,
-			},
-		},
-		Widget: widgets["homeassistant"],
-		Mounts: []scene.Mount{
-			{ID: idSceneMain, Format: pipeAt(0)},
-			{ID: idSceneSub1, Format: areaRow(3)},
-			{ID: idSceneSub3, Format: areaRow(4)},
-			{ID: idSceneTitle, Format: areaRow(5)},
-		},
+		Elements:   elements,
+		Widget:     widgets["homeassistant"],
+		Mounts:     mounts,
+		OnActivate: positionOccupancyMarks,
 	}
 }
 
-// areaRow returns a Mount.Format closure that picks segment i (one of
-// the widget's "AREA · temp°@FLAGS" strings), strips the hidden
-// "@FLAGS" suffix before display, and colors the whole line: the
-// accent orange is reserved for activity, so it fires only when FLAGS
-// is non-empty (that area is occupied or has a light on); otherwise
-// the row stays the plain neutral foreground. Earlier revisions also
-// banded the neutral case by temperature (cold/comfortable/warm/hot) —
-// dropped per the design review's "one reserved accent" note, which
-// reads a rainbow of non-accent colors as diluting what "colored"
-// means on this scene.
-func areaRow(i int) func(raw string) (text, color string) {
+// haRoomY is the top y-coordinate of each room row, in display order
+// (Upstairs / Downstairs / Bedroom / Garage) — index i's pipe field is
+// at position 3+i in the widget's raw string.
+var haRoomY = [4]int{536, 666, 796, 925}
+
+const haRoomHeight = 61
+
+// roomRow returns a Mount.Format closure that picks segment i (one of
+// the widget's "AREA · temp°@FLAGS" strings) and strips the hidden
+// "@FLAGS" suffix before display. An offline room's temp field is
+// already "—" (see fetchArea's zero value), which is what drives the
+// dimmer neutral-400 text color here.
+func roomRow(i int) func(raw string) (text, color string) {
 	return func(raw string) (text, color string) {
 		field := weatherPipeField(raw, i)
 		if field == "" {
 			return "", ""
 		}
-		text, flags, _ := strings.Cut(field, "@")
-		if flags != "" {
-			return text, cOrange
+		text, _, _ = strings.Cut(field, "@")
+		if strings.HasSuffix(text, "· —") {
+			return text, cHaNeutral400
 		}
-		return text, cFg
+		return text, cHaNeutral100
+	}
+}
+
+// Occupancy-mark geometry. The mark sits haMarkGap px left of the
+// room's centered text, vertically centered in the row; haMarkOffscreenX
+// parks it off the 800px canvas when the room isn't occupied.
+const (
+	haMarkSize       = 28
+	haMarkGap        = 19
+	haMarkOffscreenX = -haMarkSize
+	haRoomBoxCenterX = CanvasW / 2
+)
+
+// haOccupancyMarkPath is the on-device path for the pre-pushed
+// accent-colored occupancy-mark PNG (see render.OccupancyMarkPNG and
+// pushSceneBackgrounds).
+const haOccupancyMarkPath = "/userdata/wallclock_mark_occupied.png"
+
+// positionOccupancyMarks is the homeassistant scene's OnActivate: for
+// each room, it reads whether the room's raw field carries the "OCC"
+// flag and, if so, moves that room's mark Image on-screen just left of
+// the room text Mounts already rendered into `elements` this
+// activation. Must run after Mounts (Driver.activate guarantees this).
+func positionOccupancyMarks(_ time.Time, raw string, elements []frame.DispElement) {
+	for i := range haRoomY {
+		markX := haMarkOffscreenX
+		if roomOccupied(raw, 3+i) {
+			text := elementText(elements, idSceneRoomBase+i)
+			if w, err := render.MeasureLabel(text, archivoSemiBoldFile, 61); err == nil {
+				markX = haRoomBoxCenterX - w/2 - haMarkGap - haMarkSize
+			}
+		}
+		setElementX(elements, idSceneMarkBase+i, markX)
+	}
+}
+
+// roomOccupied reports whether pipe field i carries the "OCC" flag.
+func roomOccupied(raw string, i int) bool {
+	field := weatherPipeField(raw, i)
+	_, flags, _ := strings.Cut(field, "@")
+	return flags == "OCC"
+}
+
+// elementText returns the TextMessage of the element with the given ID,
+// or "" if not found.
+func elementText(elements []frame.DispElement, id int) string {
+	for _, e := range elements {
+		if e.ID == id {
+			return e.TextMessage
+		}
+	}
+	return ""
+}
+
+// setElementX sets StartX on the element with the given ID, in place.
+func setElementX(elements []frame.DispElement, id, x int) {
+	for i := range elements {
+		if elements[i].ID == id {
+			elements[i].StartX = x
+			return
+		}
 	}
 }
 

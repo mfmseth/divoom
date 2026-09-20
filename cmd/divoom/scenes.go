@@ -13,20 +13,18 @@ import (
 // CanvasW shadows render.CanvasW so scene-layout math reads naturally.
 const CanvasW = render.CanvasW
 
-// Element IDs. Always-on top reserves 1-4; scene primaries start at 9.
-// Each scene's layout is its own install, so re-using IDs across scenes is
-// fine; we keep the IDs distinct only within a single scene.
+// Element IDs. Always-on top reserves 1-4; scene primaries start at 9;
+// the occupancy-mark Image elements (see scene_homeassistant.go) start
+// at 20 to stay clearly clear of the Text-cap range. Each scene's layout
+// is its own install, so re-using IDs across scenes is fine; we keep the
+// IDs distinct only within a single scene.
 const (
-	idDay     = 1
-	idTime    = 2
-	idFooter  = 3
-	idWeekend = 4
+	idHeader = 1
+	idTime   = 2
 
-	idSceneTitle = 9
-	idSceneMain  = 10
-	idSceneSub1  = 11
-	idSceneSub2  = 12
-	idSceneSub3  = 13
+	idSceneWeather  = 9
+	idSceneRoomBase = 10 // +0..3 for Upstairs/Downstairs/Bedroom/Garage
+	idSceneMarkBase = 20 // +0..3, one Image per room's occupancy mark
 )
 
 // WeightInformational is the base weight for the homeassistant scene in
@@ -35,99 +33,55 @@ const (
 // constant for clarity over a bare literal.
 const WeightInformational = 40
 
-// fontMono is the device font ID for Archivo Black, this scene's only
-// non-stock typography -- single family per the Modernist-pairing
-// design review, used at multiple sizes rather than multiple weights
-// (custom-pushed via adb; see docs/api.md "Fonts on disk" and
-// scripts/download-fonts.sh for why it's a standalone static weight
-// rather than an instance of the variable Archivo[wdth,wght] font).
-const fontMono = 7
-
-// Gruvbox semantic colors. Reds and greens signal direction (down/up);
-// yellow / blue / aqua signal weather conditions; fg / fg-dark are quiet.
+// Device font IDs for the two Archivo weights the wallclock-scene design
+// review calls for (custom-pushed via adb; see docs/api.md "Fonts on
+// disk" and scripts/download-fonts.sh). SemiBold carries the header,
+// weather, and room rows; ExtraBold is reserved for the clock alone.
 const (
-	cFg     = "#ebdbb2"
-	cFgDark = "#a89984"
-	cRed    = "#fb4934"
-	cGreen  = "#b8bb26"
-	cYellow = "#fabd2f"
-	cBlue   = "#83a598"
-	cAqua   = "#8ec07b"
-	cPurple = "#d3869b"
-	cOrange = "#fe8019"
-	cBgHard = "#1d2021"
+	fontArchivoSemiBold  = 7
+	fontArchivoExtraBold = 8
 )
 
-// dayColors picks a gruvbox accent per weekday, sweeping the palette
-// through the week so each day reads distinctly at a glance.
-var dayColors = map[time.Weekday]string{
-	time.Sunday:    cPurple,
-	time.Monday:    cRed,
-	time.Tuesday:   cOrange,
-	time.Wednesday: cYellow,
-	time.Thursday:  cGreen,
-	time.Friday:    cAqua,
-	time.Saturday:  cBlue,
-}
+// archivoSemiBoldFile is the local TTF basename `render.MeasureLabel`
+// loads to measure room-row text width when placing an occupancy mark
+// (see scene_homeassistant.go) — must stay in sync with fontArchivoSemiBold.
+const archivoSemiBoldFile = "Archivo-SemiBold.ttf"
 
-// timeColor returns the AM/PM accent for the always-on clock — cAqua
-// mornings, cOrange afternoons/evenings — so the clock reads warm or
-// cool at a glance.
-func timeColor(now time.Time) string {
-	if now.Hour() < 12 {
-		return cAqua
-	}
-	return cOrange
-}
+// Design tokens from the wallclock-scene design review (one accent,
+// reserved for occupancy only).
+const (
+	cHaNeutral100 = "#f8f4f4"
+	cHaNeutral400 = "#bab6b6"
+	cHaNeutral700 = "#605d5d"
+	cHaNeutral900 = "#2d2b2b"
+	cHaAccent500  = "#ff563c"
+)
 
 // alwaysOn builds the shared header every scene installs on top of its
-// own Elements — day name, big clock, and the date footer row. The
-// footer used to have a second (weekend-countdown) half on its right,
-// dropped to free a Text slot: the homeassistant scene needs weather
-// and presence as two separate elements (each "its own thing," like
-// the clock), which pushes the scene to 5 Text elements -- 1 header +
-// 5 scene is the most this device's 6-Text cap allows.
-// Wired in via scene.Driver.AlwaysOn (see serve.go).
+// own Elements — one combined weekday+date row, and the big clock.
+// Wired in via scene.Driver.AlwaysOn (see serve.go). Letter-spacing from
+// the design review (0.02-0.04em) has no device-API equivalent and is
+// skipped.
 func alwaysOn(now time.Time) []frame.DispElement {
 	return []frame.DispElement{
 		{
-			// Week is a device built-in (renders the day name from
-			// the device's own clock). Doesn't count against the
-			// 6-Text cap. The "> " prompt to its left is baked into
-			// every scene bg by buildHeroImage; this element only
-			// owns the day name itself. StartX shifted right of the
-			// baked prompt; FontColor still picks up the per-day
-			// chroma so each weekday has its own colour.
-			ID: idDay, Type: "Week",
-			StartX: 110, StartY: 30, Width: 650, Height: 80,
-			Align:     0,
-			FontSize:  64,
-			FontID:    fontMono,
-			FontColor: dayColors[now.Weekday()],
-			BgColor:   cBgHard,
+			ID: idHeader, Type: "Text",
+			StartX: 40, StartY: 30, Width: 720, Height: 80,
+			Align:       2,
+			FontSize:    56,
+			FontID:      fontArchivoSemiBold,
+			FontColor:   cHaNeutral400,
+			BgColor:     cHaNeutral900,
+			TextMessage: strings.ToUpper(now.Weekday().String()) + " · " + now.Format("01-02-2006"),
 		},
 		{
 			ID: idTime, Type: "Time",
-			StartX: 50, StartY: 140, Width: 700, Height: 200,
+			StartX: 50, StartY: 165, Width: 700, Height: 200,
 			Align:     2,
-			FontSize:  160,
-			FontID:    fontMono,
-			FontColor: timeColor(now),
-			BgColor:   cBgHard,
-		},
-		// Date, right-aligned on the same row as the weekday (which
-		// sits on the left via the baked "> " prompt + idDay below) --
-		// opposite sides of one header row instead of a separate
-		// footer line. MM-DD-YYYY per request.
-		{
-			ID: idFooter, Type: "Text",
-			StartX: 40, StartY: 30, Width: 720, Height: 80,
-			Align:       1,
-			FontSize:    64,
-			FontID:      fontMono,
-			FontColor:   cFgDark,
-			BgColor:     cBgHard,
-			TextMessage: now.Format("01-02-2006"),
+			FontSize:  169,
+			FontID:    fontArchivoExtraBold,
+			FontColor: cHaNeutral100,
+			BgColor:   cHaNeutral900,
 		},
 	}
 }

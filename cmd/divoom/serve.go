@@ -88,12 +88,12 @@ func logStartup(d *scene.Driver) {
 }
 
 // pushSceneBackgrounds renders the homeassistant scene's three bg
-// variants (plain, rain-icon, snow-icon) and adb-pushes them to the
-// device. Done once at startup; the device references whichever path
-// the scene's BgPathFor picks via BackgroundImageLocalFlag: 1 in the
-// scene layout.
+// variants (plain, rain-icon, snow-icon) plus the room rows' occupancy-
+// mark asset, and adb-pushes them all to the device. Done once at
+// startup; the device references whichever background path the scene's
+// BgPathFor picks, and the mark path directly from its Image elements
+// (see scene_homeassistant.go).
 func pushSceneBackgrounds(ctx context.Context) error {
-	now := time.Now()
 	variants := []struct {
 		icon string
 		path string
@@ -103,7 +103,7 @@ func pushSceneBackgrounds(ctx context.Context) error {
 		{"snow", bgHomeAssistantSnow},
 	}
 	for _, v := range variants {
-		data, err := render.SceneHomeAssistantBackground(v.icon, render.FormatJPEG, now)
+		data, err := render.SceneHomeAssistantBackground(v.icon, render.FormatJPEG)
 		if err != nil {
 			return fmt.Errorf("render %s bg: %w", v.path, err)
 		}
@@ -111,11 +111,19 @@ func pushSceneBackgrounds(ctx context.Context) error {
 			return fmt.Errorf("push %s: %w", v.path, err)
 		}
 	}
+
+	mark, err := render.OccupancyMarkPNG(haMarkSize)
+	if err != nil {
+		return fmt.Errorf("render occupancy mark: %w", err)
+	}
+	if err := pushBytes(ctx, mark, haOccupancyMarkPath); err != nil {
+		return fmt.Errorf("push %s: %w", haOccupancyMarkPath, err)
+	}
 	return nil
 }
 
 func pushBytes(ctx context.Context, data []byte, devicePath string) error {
-	tmp, err := os.CreateTemp("", "wallclock-bg-*.jpg")
+	tmp, err := os.CreateTemp("", "wallclock-asset-*")
 	if err != nil {
 		return fmt.Errorf("temp file: %w", err)
 	}

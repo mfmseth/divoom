@@ -331,30 +331,86 @@ func SceneWeatherBackground(outlook string, format Format, now time.Time) ([]byt
 	return encodeImage(img, format)
 }
 
-// SceneHomeAssistantBackground bakes the homeassistant scene's bg for a
-// given icon hint ("rain", "snow", or "" for neither) -- the "home
-// overview" title plus, when set, a small cloud glyph with rain
-// streaks or snow dots in the top-right of the weather row (y=520-580)
-// so today's forecast reads as an icon, not just text. Three variants
-// get pre-pushed at startup; the scene's BgPathFor picks among them
-// per activation based on the widget's icon field.
-func SceneHomeAssistantBackground(icon string, format Format, now time.Time) ([]byte, error) {
-	img := buildHeroImage(now)
+// Design tokens for the wallclock-scene homeassistant redesign (mirrors
+// cmd/divoom/scenes.go's cHaXxx constants, which the device Text/Time
+// elements use — this package can't import cmd/divoom, so the values
+// are duplicated here rather than shared).
+var (
+	haNeutral900 = color.RGBA{0x2d, 0x2b, 0x2b, 0xff}
+	haNeutral700 = color.RGBA{0x60, 0x5d, 0x5d, 0xff}
+	haNeutral400 = color.RGBA{0xba, 0xb6, 0xb6, 0xff}
+	haNeutral100 = color.RGBA{0xf8, 0xf4, 0xf4, 0xff}
+	haAccent500  = color.RGBA{0xff, 0x56, 0x3c, 0xff}
+)
+
+// Divider-rule geometry, matching the design review's y-positions
+// exactly (canvas is already at the review's 800x1280 scale).
+const (
+	haDividerX0     = 40
+	haDividerX1     = CanvasW - 40
+	haDividerThick  = 5
+	haDivider1Y     = 122
+	haDivider2Y     = 501
+	haWeatherIconCX = 260
+	haWeatherIconCY = 421
+)
+
+// SceneHomeAssistantBackground bakes the homeassistant scene's bg: a
+// flat neutral-900 fill, the two divider rules that mark off the
+// header/clock and weather/rooms bands, and — for a given icon hint
+// ("rain", "snow", or "" for sunny) — a small glyph to the left of the
+// weather row's text. Three variants get pre-pushed at startup; the
+// scene's BgPathFor picks among them per activation based on the
+// widget's icon field.
+//
+// Unlike the room rows (recentered live in OnActivate via
+// render.MeasureLabel — see scene_homeassistant.go), the icon's x here
+// is fixed at bake time, so it isn't recentered against the exact
+// weather text width. Baking happens once at startup, before any
+// weather reading exists; an exact fit isn't worth chasing.
+func SceneHomeAssistantBackground(icon string, format Format) ([]byte, error) {
+	img := image.NewRGBA(image.Rect(0, 0, CanvasW, CanvasH))
+	draw.Draw(img, img.Bounds(), &image.Uniform{haNeutral900}, image.Point{}, draw.Src)
+
+	draw.Draw(img, image.Rect(haDividerX0, haDivider1Y, haDividerX1, haDivider1Y+haDividerThick),
+		&image.Uniform{haNeutral700}, image.Point{}, draw.Src)
+	draw.Draw(img, image.Rect(haDividerX0, haDivider2Y, haDividerX1, haDivider2Y+haDividerThick),
+		&image.Uniform{haNeutral700}, image.Point{}, draw.Src)
+
 	switch icon {
 	case "rain":
-		drawRainCloud(img, 660, 550)
+		drawRainCloud(img, haWeatherIconCX, haWeatherIconCY, haNeutral400)
 	case "snow":
-		drawSnowCloud(img, 660, 550)
+		drawSnowCloud(img, haWeatherIconCX, haWeatherIconCY, haNeutral400)
+	default:
+		drawSunIcon(img, haWeatherIconCX, haWeatherIconCY, haNeutral400)
 	}
 	return encodeImage(img, format)
 }
 
+// OccupancyMarkPNG renders the one small solid accent-colored square
+// pushed to the device as the room rows' occupancy-mark Image asset
+// (see cmd/divoom/scene_homeassistant.go's haMarkSize/haOccupancyMarkPath).
+func OccupancyMarkPNG(size int) ([]byte, error) {
+	img := image.NewRGBA(image.Rect(0, 0, size, size))
+	draw.Draw(img, img.Bounds(), &image.Uniform{haAccent500}, image.Point{}, draw.Src)
+	return encodeImage(img, FormatPNG)
+}
+
+// drawSunIcon paints a solid filled sun: a disc plus eight short rays,
+// matching the weight/simplicity of drawCloudBody's style rather than
+// tracing an SVG path.
+func drawSunIcon(img *image.RGBA, cx, cy int, c color.RGBA) {
+	fillCircle(img, cx, cy, 12, c)
+	for _, d := range [][2]int{{1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {1, -1}, {-1, 1}, {-1, -1}} {
+		rx, ry := cx+d[0]*18, cy+d[1]*18
+		fillCircle(img, rx, ry, 3, c)
+	}
+}
+
 // drawCloudBody paints the cloud shape shared by drawRainCloud and
-// drawSnowCloud -- three overlapping circles plus a base rectangle,
-// gruvbox fg-dark so it reads as a quiet icon rather than competing
-// with the weather text to its left.
-func drawCloudBody(img *image.RGBA, cx, cy int) {
-	c := GruvFgDark
+// drawSnowCloud -- three overlapping circles plus a base rectangle.
+func drawCloudBody(img *image.RGBA, cx, cy int, c color.RGBA) {
 	fillCircle(img, cx-18, cy, 14, c)
 	fillCircle(img, cx, cy-8, 18, c)
 	fillCircle(img, cx+18, cy, 14, c)
@@ -362,21 +418,22 @@ func drawCloudBody(img *image.RGBA, cx, cy int) {
 }
 
 // drawRainCloud draws the shared cloud body plus three short vertical
-// streaks beneath it in gruvbox blue.
-func drawRainCloud(img *image.RGBA, cx, cy int) {
-	drawCloudBody(img, cx, cy)
+// streaks beneath it, both in c (same slot, same size, same color as
+// the text it sits beside — see the design review's icon-swap note).
+func drawRainCloud(img *image.RGBA, cx, cy int, c color.RGBA) {
+	drawCloudBody(img, cx, cy, c)
 	for _, dx := range []int{-16, 0, 16} {
 		draw.Draw(img, image.Rect(cx+dx-2, cy+20, cx+dx+2, cy+40),
-			&image.Uniform{GruvBlue}, image.Point{}, draw.Src)
+			&image.Uniform{c}, image.Point{}, draw.Src)
 	}
 }
 
 // drawSnowCloud draws the shared cloud body plus three small dots
-// beneath it in gruvbox fg (off-white, evoking snowflakes).
-func drawSnowCloud(img *image.RGBA, cx, cy int) {
-	drawCloudBody(img, cx, cy)
+// beneath it, both in c.
+func drawSnowCloud(img *image.RGBA, cx, cy int, c color.RGBA) {
+	drawCloudBody(img, cx, cy, c)
 	for _, dx := range []int{-16, 0, 16} {
-		fillCircle(img, cx+dx, cy+30, 4, GruvFg)
+		fillCircle(img, cx+dx, cy+30, 4, c)
 	}
 }
 

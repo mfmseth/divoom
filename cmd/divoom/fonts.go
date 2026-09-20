@@ -16,14 +16,15 @@ import (
 // Per docs/api.md "Custom font workflow": each TTF is pushed to the
 // device's font cache as `<catalog_id+1>.bin`, then the matching
 // `font_list.cfg` registers the catalog ID so divoom_app finds it on
-// startup. One custom font, hardcoded -- the scene's only non-stock
-// typography (single-family per the Modernist-pairing design review;
-// see scripts/download-fonts.sh). Reuses catalog ID 7 -- previously
-// Iosevka's slot -- rather than registering a new ID: this codebase
-// has already hit one hardware bug from a novel, never-before-used ID
-// (see the commit history around 2026-09-18, an *element* ID that
-// silently broke rendering), and font catalog IDs are the same kind of
-// device-side-cached, easy-to-get-wrong identifier.
+// startup. Two weights per the wallclock-scene design review (see
+// scripts/download-fonts.sh): SemiBold for most text, ExtraBold for the
+// clock. Both catalog IDs already exist in the stock font_list.cfg
+// (pointing at built-in fonts) rather than being novel IDs -- ID 7 was
+// already proven safe this way (previously Iosevka, then Archivo Black);
+// ID 8 is the same move, not a new kind of risk. Contrast with this
+// codebase's one prior hardware bug from a genuinely never-before-used
+// *element* ID (commit history around 2026-09-18), which is a different
+// identifier space.
 type customFont struct {
 	src     string // basename under ./fonts/
 	devSlot string // absolute path on device
@@ -31,7 +32,8 @@ type customFont struct {
 }
 
 var customFonts = []customFont{
-	{src: "ArchivoBlack-Regular.ttf", devSlot: "/usr/share/divoom_app/divoom/21/8.bin", fontID: 7},
+	{src: "Archivo-SemiBold.ttf", devSlot: "/usr/share/divoom_app/divoom/21/8.bin", fontID: 7},
+	{src: "Archivo-ExtraBold.ttf", devSlot: "/usr/share/divoom_app/divoom/21/9.bin", fontID: 8},
 }
 
 const (
