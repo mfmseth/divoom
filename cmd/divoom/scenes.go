@@ -14,17 +14,18 @@ import (
 const CanvasW = render.CanvasW
 
 // Element IDs. Always-on top reserves 1-4; scene primaries start at 9;
-// the occupancy-mark Image elements (see scene_homeassistant.go) start
-// at 20 to stay clearly clear of the Text-cap range. Each scene's layout
-// is its own install, so re-using IDs across scenes is fine; we keep the
-// IDs distinct only within a single scene.
+// the dynamically-positioned Image elements (see scene_homeassistant.go)
+// start at 19 to stay clearly clear of the Text-cap range. Each scene's
+// layout is its own install, so re-using IDs across scenes is fine; we
+// keep the IDs distinct only within a single scene.
 const (
 	idHeader = 1
 	idTime   = 2
 
-	idSceneWeather  = 9
-	idSceneRoomBase = 10 // +0..3 for Upstairs/Downstairs/Bedroom/Garage
-	idSceneMarkBase = 20 // +0..3, one Image per room's occupancy mark
+	idSceneWeather     = 9
+	idSceneRoomBase    = 10 // +0..2 for Upstairs/Downstairs/Bedroom
+	idSceneWeatherIcon = 19
+	idSceneMarkBase    = 20 // +0..2, one Image per room's occupancy mark
 )
 
 // WeightInformational is the base weight for the homeassistant scene in
@@ -47,14 +48,18 @@ const (
 // (see scene_homeassistant.go) — must stay in sync with fontArchivoSemiBold.
 const archivoSemiBoldFile = "Archivo-SemiBold.ttf"
 
-// Design tokens from the wallclock-scene design review (one accent,
-// reserved for occupancy only).
+// Design tokens. cHaAccent500 is reserved for occupancy marks only.
+// cHaTextAccent replaces the design review's original neutral-400 gray
+// (header/weather/dim text) per user feedback wanting a brighter "pop
+// of color" there instead of a flat gray — accent-400 from the same
+// design system ramp, distinct enough from cHaAccent500 that an
+// occupancy mark doesn't blend into it.
 const (
 	cHaNeutral100 = "#f8f4f4"
-	cHaNeutral400 = "#bab6b6"
 	cHaNeutral700 = "#605d5d"
 	cHaNeutral900 = "#2d2b2b"
 	cHaAccent500  = "#ff563c"
+	cHaTextAccent = "#ff9783"
 )
 
 // alwaysOn builds the shared header every scene installs on top of its
@@ -70,7 +75,7 @@ func alwaysOn(now time.Time) []frame.DispElement {
 			Align:       2,
 			FontSize:    56,
 			FontID:      fontArchivoSemiBold,
-			FontColor:   cHaNeutral400,
+			FontColor:   cHaTextAccent,
 			BgColor:     cHaNeutral900,
 			TextMessage: strings.ToUpper(now.Weekday().String()) + " · " + now.Format("01-02-2006"),
 		},

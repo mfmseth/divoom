@@ -1,7 +1,7 @@
 // Package homeassistant queries a Home Assistant instance's REST API,
-// grouped by area (Upstairs / Downstairs / Bedroom / Garage), and emits
-// a pipe-separated
-// "<weather text>|<icon>|<presence>|<upstairs>|<downstairs>|<bedroom>|<garage>"
+// grouped by area (Upstairs / Downstairs / Bedroom), and emits a
+// pipe-separated
+// "<weather text>|<icon>|<presence>|<upstairs>|<downstairs>|<bedroom>"
 // string for the homeassistant scene. Each area field is
 // "AREA · temp°@FLAGS" — a short display text plus a hidden "@FLAGS"
 // suffix ("OCC" or empty) the scene uses only to decide whether to show
@@ -21,11 +21,7 @@ import (
 )
 
 // area bundles the entities that make up one grouped row: a climate
-// entity for the temperature reading and an occupancy sensor. Either
-// may be "" when the area has no backing entity (e.g. Garage, which
-// this home has no climate/occupancy sensors for yet) — fetchArea skips
-// a "" entity rather than querying it, so the row always renders
-// offline instead of firing a request that can only 404.
+// entity for the temperature reading and an occupancy sensor.
 type area struct {
 	name      string
 	climate   string
@@ -48,7 +44,7 @@ type Client struct {
 // New builds a Client against baseURL (e.g. "http://10.0.0.7:8123") using
 // token as a Home Assistant long-lived access token (profile > Security >
 // Long-Lived Access Tokens in the HA UI). The entity set is fixed to this
-// home's presence group and four areas — not configurable via env, same
+// home's presence group and three areas — not configurable via env, same
 // tradeoff as the hnKeywords list in serve.go.
 func New(baseURL, token string) *Client {
 	return &Client{
@@ -72,11 +68,6 @@ func New(baseURL, token string) *Client {
 				name:      "Bedroom",
 				climate:   "climate.bedroom",
 				occupancy: "binary_sensor.bedroom_occupancy",
-			},
-			{
-				// No climate/occupancy entities exist for this area
-				// yet — always renders offline. See the area doc comment.
-				name: "Garage",
 			},
 		},
 	}
@@ -112,7 +103,7 @@ func (c *Client) getState(ctx context.Context, entityID string) (*haState, error
 }
 
 // Fetch queries all configured entities in parallel and folds them into
-// "<weather>|<icon>|<presence>|<upstairs>|<downstairs>|<bedroom>|<garage>",
+// "<weather>|<icon>|<presence>|<upstairs>|<downstairs>|<bedroom>",
 // each area field formatted as "AREA · temp°@FLAGS" (see fetchArea — the
 // scene splits off "@FLAGS" to decide the occupancy mark and never
 // displays it). A failed individual lookup degrades that one piece
@@ -244,39 +235,32 @@ func iconFor(condition string) string {
 // fetchArea queries one area's climate and occupancy entities
 // concurrently and folds them into "AREA · temp°@FLAGS" -- the "@FLAGS"
 // suffix ("OCC" or empty) is a hidden sub-field the scene strips before
-// display and uses only to decide whether to show an occupancy mark. An
-// empty entity ID (an area with no backing sensor, e.g. Garage) is
-// skipped rather than queried, so temp stays "—" and occupied stays
-// false without firing a request that can only fail.
+// display and uses only to decide whether to show an occupancy mark.
 func (c *Client) fetchArea(ctx context.Context, a area) string {
 	var wg sync.WaitGroup
 	temp := "—"
 	var occupied bool
 
-	if a.climate != "" {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			s, err := c.getState(ctx, a.climate)
-			if err != nil || s == nil {
-				return
-			}
-			if t, ok := s.Attributes["current_temperature"].(float64); ok {
-				temp = strconv.Itoa(int(t)) + "°"
-			}
-		}()
-	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		s, err := c.getState(ctx, a.climate)
+		if err != nil || s == nil {
+			return
+		}
+		if t, ok := s.Attributes["current_temperature"].(float64); ok {
+			temp = strconv.Itoa(int(t)) + "°"
+		}
+	}()
 
-	if a.occupancy != "" {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			s, err := c.getState(ctx, a.occupancy)
-			if err == nil && s != nil && s.State == "on" {
-				occupied = true
-			}
-		}()
-	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		s, err := c.getState(ctx, a.occupancy)
+		if err == nil && s != nil && s.State == "on" {
+			occupied = true
+		}
+	}()
 
 	wg.Wait()
 

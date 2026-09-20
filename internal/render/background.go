@@ -31,16 +31,16 @@ var (
 	GruvBgHard       = color.RGBA{0x1d, 0x20, 0x21, 0xff}
 	GruvBgDarker     = color.RGBA{0x3c, 0x38, 0x36, 0xff}
 	GruvBgDarkerLift = color.RGBA{0x50, 0x49, 0x45, 0xff}
-	GruvFgDark   = color.RGBA{0xa8, 0x99, 0x84, 0xff}
-	GruvFg       = color.RGBA{0xeb, 0xdb, 0xb2, 0xff}
-	GruvRed      = color.RGBA{0xfb, 0x49, 0x34, 0xff}
-	GruvGreen    = color.RGBA{0xb8, 0xbb, 0x26, 0xff}
-	GruvYellow   = color.RGBA{0xfa, 0xbd, 0x2f, 0xff}
-	GruvBlue     = color.RGBA{0x83, 0xa5, 0x98, 0xff}
-	GruvPurple   = color.RGBA{0xd3, 0x86, 0x9b, 0xff}
+	GruvFgDark       = color.RGBA{0xa8, 0x99, 0x84, 0xff}
+	GruvFg           = color.RGBA{0xeb, 0xdb, 0xb2, 0xff}
+	GruvRed          = color.RGBA{0xfb, 0x49, 0x34, 0xff}
+	GruvGreen        = color.RGBA{0xb8, 0xbb, 0x26, 0xff}
+	GruvYellow       = color.RGBA{0xfa, 0xbd, 0x2f, 0xff}
+	GruvBlue         = color.RGBA{0x83, 0xa5, 0x98, 0xff}
+	GruvPurple       = color.RGBA{0xd3, 0x86, 0x9b, 0xff}
 
-	GruvAqua     = color.RGBA{0x8e, 0xc0, 0x7b, 0xff}
-	GruvOrange   = color.RGBA{0xfe, 0x80, 0x19, 0xff}
+	GruvAqua   = color.RGBA{0x8e, 0xc0, 0x7b, 0xff}
+	GruvOrange = color.RGBA{0xfe, 0x80, 0x19, 0xff}
 
 	// Faded gruvbox accents — used for letter glyphs over the calendar
 	// grid's past cells, where the cell fill is muted grey but the
@@ -334,41 +334,36 @@ func SceneWeatherBackground(outlook string, format Format, now time.Time) ([]byt
 // Design tokens for the wallclock-scene homeassistant redesign (mirrors
 // cmd/divoom/scenes.go's cHaXxx constants, which the device Text/Time
 // elements use — this package can't import cmd/divoom, so the values
-// are duplicated here rather than shared).
+// are duplicated here rather than shared). haTextAccent is the brighter
+// "pop of color" swapped in for the design review's original flat
+// neutral-400 gray on the header/weather/dim text, per user feedback.
 var (
 	haNeutral900 = color.RGBA{0x2d, 0x2b, 0x2b, 0xff}
 	haNeutral700 = color.RGBA{0x60, 0x5d, 0x5d, 0xff}
-	haNeutral400 = color.RGBA{0xba, 0xb6, 0xb6, 0xff}
 	haNeutral100 = color.RGBA{0xf8, 0xf4, 0xf4, 0xff}
 	haAccent500  = color.RGBA{0xff, 0x56, 0x3c, 0xff}
+	haTextAccent = color.RGBA{0xff, 0x97, 0x83, 0xff}
 )
 
 // Divider-rule geometry, matching the design review's y-positions
 // exactly (canvas is already at the review's 800x1280 scale).
 const (
-	haDividerX0     = 40
-	haDividerX1     = CanvasW - 40
-	haDividerThick  = 5
-	haDivider1Y     = 122
-	haDivider2Y     = 501
-	haWeatherIconCX = 260
-	haWeatherIconCY = 421
+	haDividerX0    = 40
+	haDividerX1    = CanvasW - 40
+	haDividerThick = 5
+	haDivider1Y    = 122
+	haDivider2Y    = 501
 )
 
 // SceneHomeAssistantBackground bakes the homeassistant scene's bg: a
-// flat neutral-900 fill, the two divider rules that mark off the
-// header/clock and weather/rooms bands, and — for a given icon hint
-// ("rain", "snow", or "" for sunny) — a small glyph to the left of the
-// weather row's text. Three variants get pre-pushed at startup; the
-// scene's BgPathFor picks among them per activation based on the
-// widget's icon field.
-//
-// Unlike the room rows (recentered live in OnActivate via
-// render.MeasureLabel — see scene_homeassistant.go), the icon's x here
-// is fixed at bake time, so it isn't recentered against the exact
-// weather text width. Baking happens once at startup, before any
-// weather reading exists; an exact fit isn't worth chasing.
-func SceneHomeAssistantBackground(icon string, format Format) ([]byte, error) {
+// flat neutral-900 fill plus the two divider rules that mark off the
+// header/clock and weather/rooms bands. The weather icon and room
+// occupancy marks are no longer baked here — they're separate Image
+// elements repositioned live each activation (see
+// cmd/divoom/scene_homeassistant.go's positionDynamicMarks), which is
+// also what fixed the old baked icon overlapping longer weather text: a
+// fixed bake-time position can't track the actual rendered text width.
+func SceneHomeAssistantBackground(format Format) ([]byte, error) {
 	img := image.NewRGBA(image.Rect(0, 0, CanvasW, CanvasH))
 	draw.Draw(img, img.Bounds(), &image.Uniform{haNeutral900}, image.Point{}, draw.Src)
 
@@ -377,14 +372,6 @@ func SceneHomeAssistantBackground(icon string, format Format) ([]byte, error) {
 	draw.Draw(img, image.Rect(haDividerX0, haDivider2Y, haDividerX1, haDivider2Y+haDividerThick),
 		&image.Uniform{haNeutral700}, image.Point{}, draw.Src)
 
-	switch icon {
-	case "rain":
-		drawRainCloud(img, haWeatherIconCX, haWeatherIconCY, haNeutral400)
-	case "snow":
-		drawSnowCloud(img, haWeatherIconCX, haWeatherIconCY, haNeutral400)
-	default:
-		drawSunIcon(img, haWeatherIconCX, haWeatherIconCY, haNeutral400)
-	}
 	return encodeImage(img, format)
 }
 
@@ -397,24 +384,46 @@ func OccupancyMarkPNG(size int) ([]byte, error) {
 	return encodeImage(img, FormatPNG)
 }
 
+// WeatherIconPNG renders one of the three weather-row glyphs (sun,
+// rain, snow) as a standalone asset: a neutral-900 backdrop exactly
+// matching the scene's flat background (so it blends in seamlessly
+// without needing real alpha transparency) with the glyph painted in
+// haTextAccent on top, sized to fill it.
+func WeatherIconPNG(kind string, size int) ([]byte, error) {
+	img := image.NewRGBA(image.Rect(0, 0, size, size))
+	draw.Draw(img, img.Bounds(), &image.Uniform{haNeutral900}, image.Point{}, draw.Src)
+	cx, cy := size/2, size/2
+	switch kind {
+	case "rain":
+		drawRainCloud(img, cx, cy, haTextAccent)
+	case "snow":
+		drawSnowCloud(img, cx, cy, haTextAccent)
+	default:
+		drawSunIcon(img, cx, cy, haTextAccent)
+	}
+	return encodeImage(img, FormatPNG)
+}
+
 // drawSunIcon paints a solid filled sun: a disc plus eight short rays,
 // matching the weight/simplicity of drawCloudBody's style rather than
 // tracing an SVG path.
+// Sized to sit inside a haWeatherIconSize (42x42) box around (cx, cy) —
+// see WeatherIconPNG, the only caller.
 func drawSunIcon(img *image.RGBA, cx, cy int, c color.RGBA) {
-	fillCircle(img, cx, cy, 12, c)
+	fillCircle(img, cx, cy, 8, c)
 	for _, d := range [][2]int{{1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {1, -1}, {-1, 1}, {-1, -1}} {
-		rx, ry := cx+d[0]*18, cy+d[1]*18
-		fillCircle(img, rx, ry, 3, c)
+		rx, ry := cx+d[0]*15, cy+d[1]*15
+		fillCircle(img, rx, ry, 2, c)
 	}
 }
 
 // drawCloudBody paints the cloud shape shared by drawRainCloud and
 // drawSnowCloud -- three overlapping circles plus a base rectangle.
 func drawCloudBody(img *image.RGBA, cx, cy int, c color.RGBA) {
-	fillCircle(img, cx-18, cy, 14, c)
-	fillCircle(img, cx, cy-8, 18, c)
-	fillCircle(img, cx+18, cy, 14, c)
-	draw.Draw(img, image.Rect(cx-30, cy, cx+30, cy+14), &image.Uniform{c}, image.Point{}, draw.Src)
+	fillCircle(img, cx-8, cy, 7, c)
+	fillCircle(img, cx, cy-5, 9, c)
+	fillCircle(img, cx+8, cy, 7, c)
+	draw.Draw(img, image.Rect(cx-14, cy, cx+14, cy+7), &image.Uniform{c}, image.Point{}, draw.Src)
 }
 
 // drawRainCloud draws the shared cloud body plus three short vertical
@@ -422,8 +431,8 @@ func drawCloudBody(img *image.RGBA, cx, cy int, c color.RGBA) {
 // the text it sits beside — see the design review's icon-swap note).
 func drawRainCloud(img *image.RGBA, cx, cy int, c color.RGBA) {
 	drawCloudBody(img, cx, cy, c)
-	for _, dx := range []int{-16, 0, 16} {
-		draw.Draw(img, image.Rect(cx+dx-2, cy+20, cx+dx+2, cy+40),
+	for _, dx := range []int{-7, 0, 7} {
+		draw.Draw(img, image.Rect(cx+dx-1, cy+9, cx+dx+1, cy+17),
 			&image.Uniform{c}, image.Point{}, draw.Src)
 	}
 }
@@ -432,8 +441,8 @@ func drawRainCloud(img *image.RGBA, cx, cy int, c color.RGBA) {
 // beneath it, both in c.
 func drawSnowCloud(img *image.RGBA, cx, cy int, c color.RGBA) {
 	drawCloudBody(img, cx, cy, c)
-	for _, dx := range []int{-16, 0, 16} {
-		fillCircle(img, cx+dx, cy+30, 4, c)
+	for _, dx := range []int{-7, 0, 7} {
+		fillCircle(img, cx+dx, cy+13, 2, c)
 	}
 }
 
@@ -702,12 +711,12 @@ func drawMarketsChrome(img *image.RGBA) {
 // the bottom-right corner is painted separately by drawSceneGlyph.
 func drawHNChrome(img *image.RGBA) {
 	const (
-		left          = 80
-		right         = CanvasW - 80
-		wordmarkBase  = 510 // baseline for the "HACKER NEWS" wordmark
-		brandRuleY    = 540 // top of the 2px orange separator
-		brandRuleH    = 2
-		footerRuleY   = 1140 // 1px dim rule above the metadata footer
+		left         = 80
+		right        = CanvasW - 80
+		wordmarkBase = 510 // baseline for the "HACKER NEWS" wordmark
+		brandRuleY   = 540 // top of the 2px orange separator
+		brandRuleH   = 2
+		footerRuleY  = 1140 // 1px dim rule above the metadata footer
 	)
 	if f, err := LoadFont("RobotoCondensed-Light.ttf"); err == nil {
 		face, err := opentype.NewFace(f, &opentype.FaceOptions{
@@ -817,7 +826,6 @@ func drawBakedSceneTitle(img *image.RGBA, title string) {
 	defer face.Close()
 	drawLabelCentered(img, title, face, CanvasW/2, 505, GruvFgDark)
 }
-
 
 // drawNASACredit bakes the nasa scene's title row as a two-tone
 // "NASA · astronomy picture of the day" — replaces the standard
@@ -1312,13 +1320,13 @@ func drawTerminalChrome(img *image.RGBA, prompt, sourceFooter, authorFooter stri
 // nineteenth-century epitaph or title-page motto — instantly Bierce.
 func drawPunchlineOrnaments(img *image.RGBA) {
 	const (
-		ruleLeft   = 80
-		ruleRight  = 720
-		ruleTopY   = 590
-		ruleBotY   = 1080
-		devilSize  = 80
-		devilCX    = CanvasW - 80 - devilSize/2 // 680 — flush with the right rule end
-		devilCY    = CanvasH - 200               // above the baked status bar
+		ruleLeft  = 80
+		ruleRight = 720
+		ruleTopY  = 590
+		ruleBotY  = 1080
+		devilSize = 80
+		devilCX   = CanvasW - 80 - devilSize/2 // 680 — flush with the right rule end
+		devilCY   = CanvasH - 200              // above the baked status bar
 	)
 	draw.Draw(img, image.Rect(ruleLeft, ruleTopY, ruleRight, ruleTopY+1),
 		&image.Uniform{GruvFgDark}, image.Point{}, draw.Src)
@@ -1347,8 +1355,8 @@ func drawPunchlineOrnaments(img *image.RGBA) {
 // region — no column labels or vertical dividers required.
 func drawWeatherChrome(img *image.RGBA) {
 	const (
-		colLeft = 80
-		colRight = 720
+		colLeft   = 80
+		colRight  = 720
 		stripTopY = 985
 		stripBotY = 1095
 	)
@@ -1548,15 +1556,15 @@ func CalendarBackground(now time.Time, specialDates, holidays map[int]rune, form
 type calendarCellState int
 
 const (
-	calendarPhantom        calendarCellState = iota // dayOfMonth > days in month
-	calendarPastPlain                               // past, no marker
-	calendarPastSpecial                             // past + personal special date
-	calendarPastHoliday                             // past + US federal holiday
-	calendarToday                                   // today (border is overlaid by painter)
-	calendarFutureWeekday                           // future Mon-Fri, no marker
-	calendarFutureWeekend                           // future Sat/Sun, no marker
-	calendarFutureHoliday                           // future + US federal holiday
-	calendarFutureSpecial                           // future + personal special date
+	calendarPhantom       calendarCellState = iota // dayOfMonth > days in month
+	calendarPastPlain                              // past, no marker
+	calendarPastSpecial                            // past + personal special date
+	calendarPastHoliday                            // past + US federal holiday
+	calendarToday                                  // today (border is overlaid by painter)
+	calendarFutureWeekday                          // future Mon-Fri, no marker
+	calendarFutureWeekend                          // future Sat/Sun, no marker
+	calendarFutureHoliday                          // future + US federal holiday
+	calendarFutureSpecial                          // future + personal special date
 )
 
 // calendarCellStateFor returns the visual state for the cell at (month,
@@ -1890,12 +1898,12 @@ func drawSceneGlyphAt(img *image.RGBA, scene Scene, cx, cy int) {
 		// the typographic curly. Built from rectangles plus small discs
 		// at the tips for softly-rounded corners.
 		const (
-			braceH      = 160 // total brace height
-			barW        = 12  // vertical bar thickness
-			flangeW     = 28  // horizontal flange length
-			flangeH     = 12  // horizontal flange thickness
-			gap         = 90  // gap between the two braces
-			tipR        = 6   // rounding-disc radius at the brace tips
+			braceH  = 160 // total brace height
+			barW    = 12  // vertical bar thickness
+			flangeW = 28  // horizontal flange length
+			flangeH = 12  // horizontal flange thickness
+			gap     = 90  // gap between the two braces
+			tipR    = 6   // rounding-disc radius at the brace tips
 		)
 		braceTop := cy - braceH/2
 		braceBot := cy + braceH/2
@@ -2026,10 +2034,10 @@ func drawSceneGlyphAt(img *image.RGBA, scene Scene, cx, cy int) {
 		// behind it. Reads as the iconic "space photography" motif for
 		// NASA's APOD without needing a recognisable spiral.
 		const (
-			planetR     = 70  // planet body radius
-			ringRX      = 150 // ring horizontal radius
-			ringRY      = 26  // ring vertical radius (flattened ellipse)
-			ringThick   = 10  // ring band thickness
+			planetR   = 70  // planet body radius
+			ringRX    = 150 // ring horizontal radius
+			ringRY    = 26  // ring vertical radius (flattened ellipse)
+			ringThick = 10  // ring band thickness
 		)
 		// Outer ring fill, then inner ellipse carved away so only a
 		// band remains.
@@ -2198,11 +2206,11 @@ func drawSceneGlyphAt(img *image.RGBA, scene Scene, cx, cy int) {
 		// from rectangles so it reads at glance distance as a page
 		// from a daily planner.
 		const (
-			pageW = 180
-			pageH = 170
-			tabW  = 18
-			tabH  = 22
-			rowH  = 10
+			pageW  = 180
+			pageH  = 170
+			tabW   = 18
+			tabH   = 22
+			rowH   = 10
 			rowGap = 22
 		)
 		left := cx - pageW/2

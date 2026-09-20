@@ -11,31 +11,44 @@ import (
 )
 
 // "homeassistant" — header (weekday+date) and clock from alwaysOn, then
-// a weather row and four room rows (Upstairs / Downstairs / Bedroom /
-// Garage), per the wallclock-scene design review: one Archivo family,
-// one reserved accent (occupancy only), centered throughout. The widget
-// emits "<weather>|<icon>|<presence>|<upstairs>|<downstairs>|<bedroom>|
-// <garage>" — presence is fetched but not displayed (pre-existing,
-// unrelated to this scene's layout). Each room field is
-// "AREA · temp°@FLAGS": the "@FLAGS" suffix is stripped before display
-// and used only to decide whether that room's occupancy mark shows.
+// a weather row and three room rows (Upstairs / Downstairs / Bedroom),
+// per the wallclock-scene design review: one Archivo family, one
+// reserved accent (occupancy only), centered throughout. The widget
+// emits "<weather>|<icon>|<presence>|<upstairs>|<downstairs>|<bedroom>"
+// — presence is fetched but not displayed (pre-existing, unrelated to
+// this scene's layout). Each room field is "AREA · temp°@FLAGS": the
+// "@FLAGS" suffix is stripped before display and used only to decide
+// whether that room's occupancy mark shows.
 //
 // Occupancy used to recolor the whole row; the design review replaces
 // that with a small accent-colored square prepended to the room name
 // (see haRoomY / OnActivate below) so the accent stays reserved for
-// activity instead of doubling as a temperature-reading color. A Text
-// element only has one FontColor for its whole string, so the mark has
-// to be a separate Image element positioned next to the (centered, and
-// therefore width-varying) room text — computed fresh each activation
-// with render.MeasureLabel, the same technique already used to align a
-// dynamic value after baked text in other scenes.
+// activity instead of doubling as a temperature-reading color. Likewise
+// the weather row's icon glyph sits left of its (centered, and
+// therefore width-varying) text. A Text element only has one FontColor
+// for its whole string and can't host a second glyph, so both the
+// occupancy mark and the weather icon are separate Image elements
+// repositioned fresh each activation with render.MeasureLabel against
+// the text Mounts already resolved that cycle — see
+// positionDynamicMarks.
 func homeAssistantScene(widgets map[string]widget.Widget) *scene.Scene {
 	elements := []frame.DispElement{
 		{
 			ID: idSceneWeather, Type: "Text",
 			StartX: 40, StartY: 393, Width: 720, Height: 56,
 			Align: 2, FontSize: 47, FontID: fontArchivoSemiBold,
-			FontColor: cHaNeutral400, BgColor: cHaNeutral900,
+			FontColor: cHaTextAccent, BgColor: cHaNeutral900,
+		},
+		{
+			// Url/StartX are placeholders; OnActivate sets both every
+			// activation from the widget's icon field and the weather
+			// text's measured width (see positionDynamicMarks).
+			ID: idSceneWeatherIcon, Type: "Image",
+			StartX: haMarkOffscreenX, StartY: 400,
+			Width: haWeatherIconSize, Height: haWeatherIconSize,
+			Url: haIconSunPath, ImgLocalFlag: 1,
+			FontSize: 1, FontID: fontArchivoSemiBold,
+			FontColor: cHaNeutral100, BgColor: cHaNeutral900,
 		},
 	}
 	for i, y := range haRoomY {
@@ -71,30 +84,20 @@ func homeAssistantScene(widgets map[string]widget.Widget) *scene.Scene {
 	}
 
 	return &scene.Scene{
-		Name:   "homeassistant",
-		Weight: WeightInformational,
-		BgPath: bgHomeAssistant,
-		BgPathFor: func(raw string) string {
-			switch weatherPipeField(raw, 1) {
-			case "rain":
-				return bgHomeAssistantRain
-			case "snow":
-				return bgHomeAssistantSnow
-			default:
-				return bgHomeAssistant
-			}
-		},
+		Name:       "homeassistant",
+		Weight:     WeightInformational,
+		BgPath:     bgHomeAssistant,
 		Elements:   elements,
 		Widget:     widgets["homeassistant"],
 		Mounts:     mounts,
-		OnActivate: positionOccupancyMarks,
+		OnActivate: positionDynamicMarks,
 	}
 }
 
 // haRoomY is the top y-coordinate of each room row, in display order
-// (Upstairs / Downstairs / Bedroom / Garage) — index i's pipe field is
-// at position 3+i in the widget's raw string.
-var haRoomY = [4]int{536, 666, 796, 925}
+// (Upstairs / Downstairs / Bedroom) — index i's pipe field is at
+// position 3+i in the widget's raw string.
+var haRoomY = [3]int{536, 666, 796}
 
 const haRoomHeight = 61
 
@@ -102,7 +105,7 @@ const haRoomHeight = 61
 // the widget's "AREA · temp°@FLAGS" strings) and strips the hidden
 // "@FLAGS" suffix before display. An offline room's temp field is
 // already "—" (see fetchArea's zero value), which is what drives the
-// dimmer neutral-400 text color here.
+// dimmer accent text color here.
 func roomRow(i int) func(raw string) (text, color string) {
 	return func(raw string) (text, color string) {
 		field := weatherPipeField(raw, i)
@@ -111,7 +114,7 @@ func roomRow(i int) func(raw string) (text, color string) {
 		}
 		text, _, _ = strings.Cut(field, "@")
 		if strings.HasSuffix(text, "· —") {
-			return text, cHaNeutral400
+			return text, cHaTextAccent
 		}
 		return text, cHaNeutral100
 	}
@@ -119,7 +122,8 @@ func roomRow(i int) func(raw string) (text, color string) {
 
 // Occupancy-mark geometry. The mark sits haMarkGap px left of the
 // room's centered text, vertically centered in the row; haMarkOffscreenX
-// parks it off the 800px canvas when the room isn't occupied.
+// parks it (and the weather icon, when not positioned yet) off the
+// 800px canvas.
 const (
 	haMarkSize       = 28
 	haMarkGap        = 19
@@ -127,27 +131,74 @@ const (
 	haRoomBoxCenterX = CanvasW / 2
 )
 
-// haOccupancyMarkPath is the on-device path for the pre-pushed
-// accent-colored occupancy-mark PNG (see render.OccupancyMarkPNG and
-// pushSceneBackgrounds).
-const haOccupancyMarkPath = "/userdata/wallclock_mark_occupied.png"
+// Weather-icon geometry: same idea as the occupancy mark, but for the
+// weather row's sun/rain/snow glyph, which sits haWeatherIconGap px
+// left of the (centered) weather text.
+const (
+	haWeatherIconSize = 42
+	haWeatherIconGap  = 14
+)
 
-// positionOccupancyMarks is the homeassistant scene's OnActivate: for
-// each room, it reads whether the room's raw field carries the "OCC"
-// flag and, if so, moves that room's mark Image on-screen just left of
-// the room text Mounts already rendered into `elements` this
-// activation. Must run after Mounts (Driver.activate guarantees this).
-func positionOccupancyMarks(_ time.Time, raw string, elements []frame.DispElement) {
+// On-device paths for the pre-pushed occupancy-mark and weather-icon
+// PNGs (see render.OccupancyMarkPNG, render.WeatherIconPNG, and
+// pushSceneBackgrounds).
+const (
+	haOccupancyMarkPath = "/userdata/wallclock_mark_occupied.png"
+	haIconSunPath       = "/userdata/wallclock_icon_sun.png"
+	haIconRainPath      = "/userdata/wallclock_icon_rain.png"
+	haIconSnowPath      = "/userdata/wallclock_icon_snow.png"
+)
+
+// iconPathFor maps the widget's icon field ("rain", "snow", or "" for
+// sunny) to its on-device asset path.
+func iconPathFor(icon string) string {
+	switch icon {
+	case "rain":
+		return haIconRainPath
+	case "snow":
+		return haIconSnowPath
+	default:
+		return haIconSunPath
+	}
+}
+
+// positionDynamicMarks is the homeassistant scene's OnActivate. It runs
+// after Mounts have resolved this cycle's text (Driver.activate
+// guarantees the order), and re-derives the position of every Image
+// element that has to sit next to a centered, width-varying Text
+// element:
+//
+//   - The weather icon always shows, swapped to match the widget's
+//     icon field and placed left of the weather text.
+//   - Each room's occupancy mark shows only when that room's raw field
+//     carries the "OCC" flag; otherwise it's parked off-canvas.
+func positionDynamicMarks(_ time.Time, raw string, elements []frame.DispElement) {
+	setElementURL(elements, idSceneWeatherIcon, iconPathFor(weatherPipeField(raw, 1)))
+	setElementX(elements, idSceneWeatherIcon,
+		leftOfCenteredText(elements, idSceneWeather, 47, haWeatherIconSize, haWeatherIconGap))
+
 	for i := range haRoomY {
 		markX := haMarkOffscreenX
 		if roomOccupied(raw, 3+i) {
-			text := elementText(elements, idSceneRoomBase+i)
-			if w, err := render.MeasureLabel(text, archivoSemiBoldFile, 61); err == nil {
-				markX = haRoomBoxCenterX - w/2 - haMarkGap - haMarkSize
-			}
+			markX = leftOfCenteredText(elements, idSceneRoomBase+i, 61, haMarkSize, haMarkGap)
 		}
 		setElementX(elements, idSceneMarkBase+i, markX)
 	}
+}
+
+// leftOfCenteredText measures the current TextMessage of the element
+// with the given ID (rendered at fontSize in Archivo SemiBold) and
+// returns the StartX an elementSize-wide glyph needs to sit gap px to
+// its left, given both are centered as one group in the room/weather
+// box (see haRoomBoxCenterX). Falls back to parking off-canvas if the
+// text can't be measured.
+func leftOfCenteredText(elements []frame.DispElement, textID int, fontSize float64, elementSize, gap int) int {
+	text := elementText(elements, textID)
+	w, err := render.MeasureLabel(text, archivoSemiBoldFile, fontSize)
+	if err != nil {
+		return haMarkOffscreenX
+	}
+	return haRoomBoxCenterX - w/2 - gap - elementSize
 }
 
 // roomOccupied reports whether pipe field i carries the "OCC" flag.
@@ -178,11 +229,16 @@ func setElementX(elements []frame.DispElement, id, x int) {
 	}
 }
 
-// On-device bg paths for this scene. Three variants -- plain, rain-icon,
-// snow-icon -- all pre-pushed at startup; the scene's BgPathFor picks
-// among them per activation based on the widget's icon field.
-const (
-	bgHomeAssistant     = "/userdata/wallclock_bg_homeassistant.jpg"
-	bgHomeAssistantRain = "/userdata/wallclock_bg_homeassistant_rain.jpg"
-	bgHomeAssistantSnow = "/userdata/wallclock_bg_homeassistant_snow.jpg"
-)
+// setElementURL sets Url on the element with the given ID, in place.
+func setElementURL(elements []frame.DispElement, id int, url string) {
+	for i := range elements {
+		if elements[i].ID == id {
+			elements[i].Url = url
+			return
+		}
+	}
+}
+
+// bgHomeAssistant is the on-device path for this scene's (single, flat)
+// background, pre-pushed at startup.
+const bgHomeAssistant = "/userdata/wallclock_bg_homeassistant.jpg"

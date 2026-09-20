@@ -48,7 +48,7 @@ func runRender(args []string) error {
 		// generic SceneBackground preview dispatcher), so this
 		// screenshot actually reflects what gets installed.
 		{name: "scene-homeassistant", render: func() ([]byte, error) {
-			return render.SceneHomeAssistantBackground("", render.FormatJPEG)
+			return render.SceneHomeAssistantBackground(render.FormatJPEG)
 		}},
 	}
 

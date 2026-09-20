@@ -53,7 +53,7 @@ func bakeAlwaysOnHeader(img *image.RGBA, now time.Time) error {
 	}
 	defer headerFace.Close()
 	header := strings.ToUpper(now.Weekday().String()) + " · " + now.Format("01-02-2006")
-	drawLabelCentered(img, header, headerFace, CanvasW/2, 78, haNeutral400)
+	drawLabelCentered(img, header, headerFace, CanvasW/2, 78, haTextAccent)
 
 	extrabold, err := LoadFont("Archivo-ExtraBold.ttf")
 	if err != nil {

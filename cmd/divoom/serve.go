@@ -87,28 +87,35 @@ func logStartup(d *scene.Driver) {
 	}
 }
 
-// pushSceneBackgrounds renders the homeassistant scene's three bg
-// variants (plain, rain-icon, snow-icon) plus the room rows' occupancy-
-// mark asset, and adb-pushes them all to the device. Done once at
-// startup; the device references whichever background path the scene's
-// BgPathFor picks, and the mark path directly from its Image elements
-// (see scene_homeassistant.go).
+// pushSceneBackgrounds renders the homeassistant scene's (single, flat)
+// background plus its dynamic-Image assets -- the three weather icons
+// and the room rows' occupancy mark -- and adb-pushes them all to the
+// device. Done once at startup; the scene's Image elements reference
+// these on-device paths directly (see scene_homeassistant.go).
 func pushSceneBackgrounds(ctx context.Context) error {
-	variants := []struct {
-		icon string
+	bg, err := render.SceneHomeAssistantBackground(render.FormatJPEG)
+	if err != nil {
+		return fmt.Errorf("render %s bg: %w", bgHomeAssistant, err)
+	}
+	if err := pushBytes(ctx, bg, bgHomeAssistant); err != nil {
+		return fmt.Errorf("push %s: %w", bgHomeAssistant, err)
+	}
+
+	icons := []struct {
+		kind string
 		path string
 	}{
-		{"", bgHomeAssistant},
-		{"rain", bgHomeAssistantRain},
-		{"snow", bgHomeAssistantSnow},
+		{"", haIconSunPath},
+		{"rain", haIconRainPath},
+		{"snow", haIconSnowPath},
 	}
-	for _, v := range variants {
-		data, err := render.SceneHomeAssistantBackground(v.icon, render.FormatJPEG)
+	for _, ic := range icons {
+		data, err := render.WeatherIconPNG(ic.kind, haWeatherIconSize)
 		if err != nil {
-			return fmt.Errorf("render %s bg: %w", v.path, err)
+			return fmt.Errorf("render %s icon: %w", ic.path, err)
 		}
-		if err := pushBytes(ctx, data, v.path); err != nil {
-			return fmt.Errorf("push %s: %w", v.path, err)
+		if err := pushBytes(ctx, data, ic.path); err != nil {
+			return fmt.Errorf("push %s: %w", ic.path, err)
 		}
 	}
 
