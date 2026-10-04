@@ -115,7 +115,7 @@ the dashboard relies on these, all configured in the HA UI (no YAML):
 | UniFi Network integration | Host `10.0.0.1` (UCG Fiber), local account from 1Password item `unifi` | Source of the WAN latency sensors |
 | `sensor.ucg_fiber_{cloudflare,google,microsoft}_{wan,wan2}_latency` | UniFi's built-in WAN probes — **disabled by default in HA**, enabled by hand | `INTERNET DOWN` banner: down when none of the six has a number |
 | Google Gemini integration | API key from 1Password item `gemini` (Google AI Studio) | Provides `ai_task.google_ai_task` |
-| `automation.what_to_wear_ask_gemini` | Hourly at :05, 6am–10pm: sends Gemini the next 12 h of hourly forecast and makes it pick one option of `input_select.what_to_wear_ai`; stores the pick, a one-line reason (`input_text.what_to_wear_ai_reason`) and the time (`input_datetime.what_to_wear_ai_updated`) | AI what-to-wear |
+| `automation.what_to_wear_ask_gemini` | Hourly at :05, 6am–9pm: sends Gemini the current weather plus the hourly forecast from now until 10pm today (cut in the template, so overnight rain never adds UMBRELLA), with the same temperature tiers as the fallback rules, and makes it pick one option of `input_select.what_to_wear_ai`; stores the pick, a one-line reason (`input_text.what_to_wear_ai_reason`) and the time (`input_datetime.what_to_wear_ai_updated`) | AI what-to-wear |
 | `sensor.what_to_wear` | Template helper: Gemini's pick while under 3 h old, otherwise rules from current weather (°F tiers SHORTS ≥80 … WARM COAT <40, wind ≥15 mph counts 5° colder, `+ UMBRELLA` for rain, `+ BOOTS` for snow) | The line the frame shows |
 
 **The 18 what-to-wear phrases live in two places** and must change
