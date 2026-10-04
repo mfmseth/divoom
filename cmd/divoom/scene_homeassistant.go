@@ -97,7 +97,7 @@ func homeAssistantScene(widgets map[string]widget.Widget) *scene.Scene {
 // haRoomY is the top y-coordinate of each room row, in display order
 // (Upstairs / Downstairs / Bedroom) — index i's pipe field is at
 // position 3+i in the widget's raw string.
-var haRoomY = [3]int{650, 820, 990}
+var haRoomY = [3]int{570, 740, 910}
 
 // haTextSize is shared by the weather and room rows: as large as
 // "DOWNSTAIRS 76°" can go and still fit, with its occupancy mark, in
@@ -106,7 +106,7 @@ var haRoomY = [3]int{650, 820, 990}
 const (
 	haTextSize  = 78
 	haRowHeight = 95
-	haWeatherY  = 460
+	haWeatherY  = 385
 )
 
 // roomRow returns a Mount.Format closure that picks segment i (one of

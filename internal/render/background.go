@@ -353,7 +353,7 @@ const (
 	haDividerX1    = CanvasW - 40
 	haDividerThick = 5
 	haDivider1Y    = 122
-	haDivider2Y    = 600
+	haDivider2Y    = 522
 )
 
 // SceneHomeAssistantBackground bakes the homeassistant scene's bg: a
