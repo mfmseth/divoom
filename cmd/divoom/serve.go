@@ -113,7 +113,7 @@ func logStartup(d *scene.Driver) {
 
 // pushSceneBackgrounds renders the homeassistant scene's (single, flat)
 // background plus its dynamic-Image assets -- the three weather icons,
-// the room rows' occupancy mark, and the HA-down banner -- and
+// the room rows' occupancy mark, and the alert banners -- and
 // adb-pushes them all to the device. Run by `divoom push`; the scene's Image elements reference
 // these on-device paths directly (see scene_homeassistant.go).
 func pushSceneBackgrounds(ctx context.Context) error {
@@ -143,12 +143,14 @@ func pushSceneBackgrounds(ctx context.Context) error {
 		}
 	}
 
-	banner, err := render.HADownBannerPNG(CanvasW, haBannerHeight)
-	if err != nil {
-		return fmt.Errorf("render HA-down banner: %w", err)
-	}
-	if err := pushBytes(ctx, banner, haBannerPath); err != nil {
-		return fmt.Errorf("push %s: %w", haBannerPath, err)
+	for _, b := range haBanners {
+		data, err := render.AlertBannerPNG(b.text, CanvasW, haBannerHeight)
+		if err != nil {
+			return fmt.Errorf("render %s banner: %w", b.path, err)
+		}
+		if err := pushBytes(ctx, data, b.path); err != nil {
+			return fmt.Errorf("push %s: %w", b.path, err)
+		}
 	}
 
 	mark, err := render.OccupancyMarkPNG(haMarkSize)

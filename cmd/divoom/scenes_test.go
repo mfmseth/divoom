@@ -33,27 +33,28 @@ func TestAlwaysOnTextsMatchesAlwaysOn(t *testing.T) {
 	}
 }
 
-// The HA-down banner sits on-screen only when the widget reports Home
-// Assistant down.
-func TestHABannerShowsOnlyWhenDown(t *testing.T) {
-	bannerX := func(raw string) int {
-		s := homeAssistantScene(nil)
-		elements := append([]frame.DispElement(nil), s.Elements...)
+// The alert banner sits on-screen, showing the matching image, only
+// when the widget reports Home Assistant or the internet down.
+func TestAlertBannerShowsOnlyWhenDown(t *testing.T) {
+	banner := func(status string) (x int, url string) {
+		raw := "CLOUDY 61°||HOME|UPSTAIRS 76°@|DOWNSTAIRS 77°@|BEDROOM 76°@|" + status
+		elements := append([]frame.DispElement(nil), homeAssistantScene(nil).Elements...)
 		positionDynamicMarks(time.Now(), raw, elements)
 		for _, e := range elements {
-			if e.ID == idSceneHABanner {
-				return e.StartX
+			if e.ID == idSceneBanner {
+				return e.StartX, e.Url
 			}
 		}
 		t.Fatal("no banner element")
-		return 0
+		return 0, ""
 	}
-	up := "CLOUDY 61°||HOME|UPSTAIRS 76°@|DOWNSTAIRS 77°@|BEDROOM 76°@|"
-	down := "WEATHER —||?|UPSTAIRS —@|DOWNSTAIRS —@|BEDROOM —@|" + homeassistant.StatusDown
-	if x := bannerX(up); x+CanvasW > 0 {
-		t.Errorf("HA up: banner StartX = %d, want off-canvas", x)
+	if x, _ := banner(""); x+CanvasW > 0 {
+		t.Errorf("all up: banner StartX = %d, want off-canvas", x)
 	}
-	if x := bannerX(down); x != 0 {
-		t.Errorf("HA down: banner StartX = %d, want 0", x)
+	for _, status := range []string{homeassistant.StatusDown, homeassistant.StatusISPDown} {
+		x, url := banner(status)
+		if x != 0 || url != haBanners[status].path {
+			t.Errorf("%s: banner at x=%d url=%q, want x=0 url=%q", status, x, url, haBanners[status].path)
+		}
 	}
 }

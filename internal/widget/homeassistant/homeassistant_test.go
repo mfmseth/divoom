@@ -35,13 +35,29 @@ func TestFetchReportsDownWhenNothingAnswers(t *testing.T) {
 
 func TestFetchNotDownWhenSomeEntitiesAnswer(t *testing.T) {
 	got := fetchStatus(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/states/climate.upstairs" {
+		switch r.URL.Path {
+		case "/api/states/climate.upstairs":
 			w.Write([]byte(`{"state":"off","attributes":{"current_temperature":76}}`))
-			return
+		case "/api/states/sensor.ucg_fiber_google_wan2_latency":
+			w.Write([]byte(`{"state":"12","attributes":{}}`))
+		default:
+			http.NotFound(w, r)
 		}
-		http.NotFound(w, r)
 	})
 	if got != "" {
-		t.Errorf("status = %q, want empty (only some entities missing)", got)
+		t.Errorf("status = %q, want empty (HA answers, one WAN probe has a reading)", got)
+	}
+}
+
+func TestFetchReportsISPDownWhenNoWANReading(t *testing.T) {
+	got := fetchStatus(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "_latency") {
+			w.Write([]byte(`{"state":"unknown","attributes":{}}`))
+			return
+		}
+		w.Write([]byte(`{"state":"off","attributes":{"current_temperature":76}}`))
+	})
+	if got != StatusISPDown {
+		t.Errorf("status = %q, want %q", got, StatusISPDown)
 	}
 }

@@ -7,7 +7,9 @@
 // suffix ("OCC" or empty) the scene uses only to decide whether to show
 // an occupancy mark, never displays — see fetchArea. icon is "rain",
 // "snow", or "" depending on today's forecast. status is StatusDown when
-// no request to Home Assistant succeeded this Fetch, otherwise "".
+// no request to Home Assistant succeeded this Fetch, StatusISPDown when
+// HA answered but none of UniFi's WAN latency probes has a reading,
+// otherwise "".
 package homeassistant
 
 import (
@@ -41,6 +43,11 @@ type Client struct {
 	presenceEntity string
 	weatherEntity  string
 	areas          []area
+	// wanLatency are the UniFi integration's per-WAN latency probes
+	// (disabled by default in HA; enabled for this). Each reads a number
+	// while that WAN reaches its target, so none reading means no
+	// internet on either line.
+	wanLatency []string
 
 	// okStates counts getState successes during the current Fetch, so
 	// Fetch can tell "Home Assistant is down" (zero) apart from a few
@@ -48,9 +55,13 @@ type Client struct {
 	okStates atomic.Int32
 }
 
-// StatusDown is the status field Fetch reports when Home Assistant
-// answered none of its requests (unreachable, or the token is rejected).
-const StatusDown = "DOWN"
+// Status field values Fetch reports. StatusDown: Home Assistant answered
+// none of its requests (unreachable, or the token is rejected).
+// StatusISPDown: HA is fine but no WAN latency probe has a reading.
+const (
+	StatusDown    = "DOWN"
+	StatusISPDown = "ISP_DOWN"
+)
 
 // New builds a Client against baseURL (e.g. "http://10.0.0.7:8123") using
 // token as a Home Assistant long-lived access token (profile > Security >
@@ -64,6 +75,14 @@ func New(baseURL, token string) *Client {
 		http:           &http.Client{Timeout: 10 * time.Second},
 		presenceEntity: "group.home_presence",
 		weatherEntity:  "weather.forecast_home",
+		wanLatency: []string{
+			"sensor.ucg_fiber_cloudflare_wan_latency",
+			"sensor.ucg_fiber_google_wan_latency",
+			"sensor.ucg_fiber_microsoft_wan_latency",
+			"sensor.ucg_fiber_cloudflare_wan2_latency",
+			"sensor.ucg_fiber_google_wan2_latency",
+			"sensor.ucg_fiber_microsoft_wan2_latency",
+		},
 		areas: []area{
 			{
 				name:      "Upstairs",
@@ -157,11 +176,30 @@ func (c *Client) Fetch(ctx context.Context) (string, error) {
 		}()
 	}
 
+	var wanUp atomic.Bool
+	for _, entityID := range c.wanLatency {
+		entityID := entityID
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			s, err := c.getState(ctx, entityID)
+			if err != nil || s == nil {
+				return
+			}
+			if _, err := strconv.ParseFloat(s.State, 64); err == nil {
+				wanUp.Store(true)
+			}
+		}()
+	}
+
 	wg.Wait()
 
 	status := ""
-	if c.okStates.Load() == 0 {
+	switch {
+	case c.okStates.Load() == 0:
 		status = StatusDown
+	case !wanUp.Load():
+		status = StatusISPDown
 	}
 	return weatherText + "|" + icon + "|" + presence + "|" + strings.Join(areaText, "|") + "|" + status, nil
 }

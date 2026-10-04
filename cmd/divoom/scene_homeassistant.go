@@ -77,13 +77,13 @@ func homeAssistantScene(widgets map[string]widget.Widget) *scene.Scene {
 		})
 	}
 
-	// Parked off-canvas; OnActivate brings it on-screen only while Home
-	// Assistant is down.
+	// Parked off-canvas; OnActivate brings it on-screen, with the
+	// matching image, only while Home Assistant or the internet is down.
 	elements = append(elements, frame.DispElement{
-		ID: idSceneHABanner, Type: "Image",
+		ID: idSceneBanner, Type: "Image",
 		StartX: -CanvasW, StartY: haBannerY,
 		Width: CanvasW, Height: haBannerHeight,
-		Url: haBannerPath, ImgLocalFlag: 1,
+		Url: haBanners[homeassistant.StatusDown].path, ImgLocalFlag: 1,
 		FontSize: 1, FontID: fontArchivoSemiBold,
 		FontColor: cHaNeutral100, BgColor: cHaNeutral900,
 	})
@@ -158,7 +158,7 @@ const (
 	haWeatherIconGap  = 14
 )
 
-// The HA-down banner sits in the otherwise-empty space below the last
+// The alert banner sits in the otherwise-empty space below the last
 // room row (which ends at haRoomY[2]+haRowHeight = 1005), so showing it
 // doesn't cover or move anything.
 const (
@@ -166,11 +166,18 @@ const (
 	haBannerHeight = 120
 )
 
-// On-device paths for the pre-pushed occupancy-mark, weather-icon and
-// HA-down banner PNGs (see render.OccupancyMarkPNG, render.WeatherIconPNG,
-// render.HADownBannerPNG, and pushSceneBackgrounds).
+// haBanners maps each widget status that warrants an alert to its
+// banner's text and pre-pushed on-device image (see render.AlertBannerPNG
+// and pushSceneBackgrounds).
+var haBanners = map[string]struct{ text, path string }{
+	homeassistant.StatusDown:    {"HOME ASSISTANT DOWN", "/userdata/wallclock_banner_ha_down.png"},
+	homeassistant.StatusISPDown: {"INTERNET DOWN", "/userdata/wallclock_banner_isp_down.png"},
+}
+
+// On-device paths for the pre-pushed occupancy-mark and weather-icon
+// PNGs (see render.OccupancyMarkPNG, render.WeatherIconPNG, and
+// pushSceneBackgrounds).
 const (
-	haBannerPath        = "/userdata/wallclock_banner_ha_down.png"
 	haOccupancyMarkPath = "/userdata/wallclock_mark_occupied.png"
 	haIconSunPath       = "/userdata/wallclock_icon_sun.png"
 	haIconRainPath      = "/userdata/wallclock_icon_rain.png"
@@ -200,14 +207,15 @@ func iconPathFor(icon string) string {
 //     icon field and placed left of the weather text.
 //   - Each room's occupancy mark shows only when that room's raw field
 //     carries the "OCC" flag; otherwise it's parked off-canvas.
-//   - The red HA-down banner shows only while the widget reports Home
-//     Assistant down; otherwise it's parked off-canvas.
+//   - The red alert banner shows only while the widget reports Home
+//     Assistant or the internet down; otherwise it's parked off-canvas.
 func positionDynamicMarks(_ time.Time, raw string, elements []frame.DispElement) {
 	bannerX := -CanvasW
-	if weatherPipeField(raw, 6) == homeassistant.StatusDown {
+	if b, ok := haBanners[weatherPipeField(raw, 6)]; ok {
+		setElementURL(elements, idSceneBanner, b.path)
 		bannerX = 0
 	}
-	setElementX(elements, idSceneHABanner, bannerX)
+	setElementX(elements, idSceneBanner, bannerX)
 
 	setElementURL(elements, idSceneWeatherIcon, iconPathFor(weatherPipeField(raw, 1)))
 	setElementX(elements, idSceneWeatherIcon,

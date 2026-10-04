@@ -130,10 +130,10 @@ func OccupancyMarkPNG(size int) ([]byte, error) {
 	return encodeImage(img, FormatPNG)
 }
 
-// HADownBannerPNG renders the full-width red "HOME ASSISTANT DOWN"
-// banner the homeassistant scene shows at the bottom of the screen while
-// Home Assistant is unreachable (see cmd/divoom/scene_homeassistant.go).
-func HADownBannerPNG(width, height int) ([]byte, error) {
+// AlertBannerPNG renders a full-width red banner with text centered on
+// it — the homeassistant scene's "HOME ASSISTANT DOWN" / "INTERNET DOWN"
+// alerts (see cmd/divoom/scene_homeassistant.go).
+func AlertBannerPNG(text string, width, height int) ([]byte, error) {
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
 	draw.Draw(img, img.Bounds(), &image.Uniform{haAlertRed}, image.Point{}, draw.Src)
 	f, err := LoadFont("Archivo-ExtraBold.ttf")
@@ -147,7 +147,7 @@ func HADownBannerPNG(width, height int) ([]byte, error) {
 	defer face.Close()
 	m := face.Metrics()
 	baseline := height/2 + (m.Ascent-m.Descent).Round()/2
-	drawLabelCentered(img, "HOME ASSISTANT DOWN", face, width/2, baseline, haNeutral100)
+	drawLabelCentered(img, text, face, width/2, baseline, haNeutral100)
 	return encodeImage(img, FormatPNG)
 }
 
