@@ -8,6 +8,7 @@ import (
 	"github.com/dragonpaw/divoom/internal/render"
 	"github.com/dragonpaw/divoom/internal/scene"
 	"github.com/dragonpaw/divoom/internal/widget"
+	"github.com/dragonpaw/divoom/internal/widget/homeassistant"
 )
 
 // "homeassistant" — header (weekday+date) and clock from alwaysOn, then
@@ -75,6 +76,18 @@ func homeAssistantScene(widgets map[string]widget.Widget) *scene.Scene {
 			FontColor: cHaNeutral100, BgColor: cHaNeutral900,
 		})
 	}
+
+	// Last in the list so it layers over the header row it covers.
+	// Parked off-canvas; OnActivate brings it on-screen only while Home
+	// Assistant is down.
+	elements = append(elements, frame.DispElement{
+		ID: idSceneHABanner, Type: "Image",
+		StartX: -CanvasW, StartY: 0,
+		Width: CanvasW, Height: haBannerHeight,
+		Url: haBannerPath, ImgLocalFlag: 1,
+		FontSize: 1, FontID: fontArchivoSemiBold,
+		FontColor: cHaNeutral100, BgColor: cHaNeutral900,
+	})
 
 	mounts := []scene.Mount{
 		{ID: idSceneWeather, Format: pipeAt(0)},
@@ -146,10 +159,15 @@ const (
 	haWeatherIconGap  = 14
 )
 
-// On-device paths for the pre-pushed occupancy-mark and weather-icon
-// PNGs (see render.OccupancyMarkPNG, render.WeatherIconPNG, and
-// pushSceneBackgrounds).
+// haBannerHeight covers the header row, stopping just above the first
+// divider rule (render's haDivider1Y = 122).
+const haBannerHeight = 120
+
+// On-device paths for the pre-pushed occupancy-mark, weather-icon and
+// HA-down banner PNGs (see render.OccupancyMarkPNG, render.WeatherIconPNG,
+// render.HADownBannerPNG, and pushSceneBackgrounds).
 const (
+	haBannerPath        = "/userdata/wallclock_banner_ha_down.png"
 	haOccupancyMarkPath = "/userdata/wallclock_mark_occupied.png"
 	haIconSunPath       = "/userdata/wallclock_icon_sun.png"
 	haIconRainPath      = "/userdata/wallclock_icon_rain.png"
@@ -179,7 +197,15 @@ func iconPathFor(icon string) string {
 //     icon field and placed left of the weather text.
 //   - Each room's occupancy mark shows only when that room's raw field
 //     carries the "OCC" flag; otherwise it's parked off-canvas.
+//   - The red HA-down banner shows only while the widget reports Home
+//     Assistant down; otherwise it's parked off-canvas.
 func positionDynamicMarks(_ time.Time, raw string, elements []frame.DispElement) {
+	bannerX := -CanvasW
+	if weatherPipeField(raw, 6) == homeassistant.StatusDown {
+		bannerX = 0
+	}
+	setElementX(elements, idSceneHABanner, bannerX)
+
 	setElementURL(elements, idSceneWeatherIcon, iconPathFor(weatherPipeField(raw, 1)))
 	setElementX(elements, idSceneWeatherIcon,
 		leftOfCenteredText(elements, idSceneWeather, haTextSize, haWeatherIconSize, haWeatherIconGap))

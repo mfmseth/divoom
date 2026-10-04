@@ -26,6 +26,7 @@ const (
 	idSceneRoomBase    = 10 // +0..2 for Upstairs/Downstairs/Bedroom
 	idSceneWeatherIcon = 19
 	idSceneMarkBase    = 20 // +0..2, one Image per room's occupancy mark
+	idSceneHABanner    = 23
 )
 
 // WeightInformational is the base weight for the homeassistant scene in

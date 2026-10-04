@@ -1,12 +1,13 @@
 // Package homeassistant queries a Home Assistant instance's REST API,
 // grouped by area (Upstairs / Downstairs / Bedroom), and emits a
 // pipe-separated
-// "<weather text>|<icon>|<presence>|<upstairs>|<downstairs>|<bedroom>"
+// "<weather text>|<icon>|<presence>|<upstairs>|<downstairs>|<bedroom>|<status>"
 // string for the homeassistant scene. Each area field is
 // "AREA temp°@FLAGS" — a short display text plus a hidden "@FLAGS"
 // suffix ("OCC" or empty) the scene uses only to decide whether to show
 // an occupancy mark, never displays — see fetchArea. icon is "rain",
-// "snow", or "" depending on today's forecast.
+// "snow", or "" depending on today's forecast. status is StatusDown when
+// no request to Home Assistant succeeded this Fetch, otherwise "".
 package homeassistant
 
 import (
@@ -17,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -39,7 +41,16 @@ type Client struct {
 	presenceEntity string
 	weatherEntity  string
 	areas          []area
+
+	// okStates counts getState successes during the current Fetch, so
+	// Fetch can tell "Home Assistant is down" (zero) apart from a few
+	// individual entities being unavailable.
+	okStates atomic.Int32
 }
+
+// StatusDown is the status field Fetch reports when Home Assistant
+// answered none of its requests (unreachable, or the token is rejected).
+const StatusDown = "DOWN"
 
 // New builds a Client against baseURL (e.g. "http://10.0.0.7:8123") using
 // token as a Home Assistant long-lived access token (profile > Security >
@@ -99,17 +110,19 @@ func (c *Client) getState(ctx context.Context, entityID string) (*haState, error
 	if err := json.NewDecoder(resp.Body).Decode(&s); err != nil {
 		return nil, fmt.Errorf("decode %s: %w", entityID, err)
 	}
+	c.okStates.Add(1)
 	return &s, nil
 }
 
 // Fetch queries all configured entities in parallel and folds them into
-// "<weather>|<icon>|<presence>|<upstairs>|<downstairs>|<bedroom>",
+// "<weather>|<icon>|<presence>|<upstairs>|<downstairs>|<bedroom>|<status>",
 // each area field formatted as "AREA temp°@FLAGS" (see fetchArea — the
 // scene splits off "@FLAGS" to decide the occupancy mark and never
 // displays it). A failed individual lookup degrades that one piece
 // rather than failing the whole scene — a single down entity shouldn't
 // blank the whole card.
 func (c *Client) Fetch(ctx context.Context) (string, error) {
+	c.okStates.Store(0)
 	var wg sync.WaitGroup
 	var presence, weatherText, icon string
 	areaText := make([]string, len(c.areas))
@@ -146,7 +159,11 @@ func (c *Client) Fetch(ctx context.Context) (string, error) {
 
 	wg.Wait()
 
-	return weatherText + "|" + icon + "|" + presence + "|" + strings.Join(areaText, "|"), nil
+	status := ""
+	if c.okStates.Load() == 0 {
+		status = StatusDown
+	}
+	return weatherText + "|" + icon + "|" + presence + "|" + strings.Join(areaText, "|") + "|" + status, nil
 }
 
 // shortConditions renames the Home Assistant weather states whose

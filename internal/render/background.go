@@ -87,6 +87,7 @@ var (
 	haNeutral100 = color.RGBA{0xf8, 0xf4, 0xf4, 0xff}
 	haAccent500  = color.RGBA{0xff, 0x56, 0x3c, 0xff}
 	haTextAccent = color.RGBA{0xff, 0x97, 0x83, 0xff}
+	haAlertRed   = color.RGBA{0xd3, 0x2f, 0x2f, 0xff}
 )
 
 // Divider-rule geometry. haDivider2Y sits in the gap between the
@@ -126,6 +127,27 @@ func SceneHomeAssistantBackground(format Format) ([]byte, error) {
 func OccupancyMarkPNG(size int) ([]byte, error) {
 	img := image.NewRGBA(image.Rect(0, 0, size, size))
 	draw.Draw(img, img.Bounds(), &image.Uniform{haAccent500}, image.Point{}, draw.Src)
+	return encodeImage(img, FormatPNG)
+}
+
+// HADownBannerPNG renders the full-width red "HOME ASSISTANT DOWN"
+// banner the homeassistant scene shows over its header row while Home
+// Assistant is unreachable (see cmd/divoom/scene_homeassistant.go).
+func HADownBannerPNG(width, height int) ([]byte, error) {
+	img := image.NewRGBA(image.Rect(0, 0, width, height))
+	draw.Draw(img, img.Bounds(), &image.Uniform{haAlertRed}, image.Point{}, draw.Src)
+	f, err := LoadFont("Archivo-ExtraBold.ttf")
+	if err != nil {
+		return nil, err
+	}
+	face, err := opentype.NewFace(f, &opentype.FaceOptions{Size: 52, DPI: 72, Hinting: font.HintingFull})
+	if err != nil {
+		return nil, err
+	}
+	defer face.Close()
+	m := face.Metrics()
+	baseline := height/2 + (m.Ascent-m.Descent).Round()/2
+	drawLabelCentered(img, "HOME ASSISTANT DOWN", face, width/2, baseline, haNeutral100)
 	return encodeImage(img, FormatPNG)
 }
 
