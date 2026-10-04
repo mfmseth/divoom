@@ -72,10 +72,9 @@ const (
 // type: the built-in clock self-updates but a live test against the
 // frame confirmed its 12-hour mode shows no AM/PM indicator at all
 // (device firmware limitation) -- there's no way to get AM/PM out of
-// it. Rendering the time ourselves means it only refreshes on each
-// scene reinstall (~3 min, same cadence as everything else in this
-// scene) rather than every second, a tradeoff accepted in exchange for
-// the simpler change. FontSize dropped from the bare-digits 169 to 140
+// it. Rendering the time ourselves means the daemon has to keep it
+// current: tickClock (serve.go) patches the clock and header text at
+// every minute boundary between scene reinstalls. FontSize dropped from the bare-digits 169 to 140
 // -- "12:32 PM" (the widest case) measures ~651px at 140 in Archivo
 // ExtraBold, fitting the 700px box; 169 would have clipped it.
 func alwaysOn(now time.Time) []frame.DispElement {
@@ -88,7 +87,7 @@ func alwaysOn(now time.Time) []frame.DispElement {
 			FontID:      fontArchivoSemiBold,
 			FontColor:   cHaTextAccent,
 			BgColor:     cHaNeutral900,
-			TextMessage: strings.ToUpper(now.Weekday().String()) + " · " + now.Format("01-02-2006"),
+			TextMessage: headerText(now),
 		},
 		{
 			ID: idTime, Type: "Text",
@@ -98,9 +97,26 @@ func alwaysOn(now time.Time) []frame.DispElement {
 			FontID:      fontArchivoExtraBold,
 			FontColor:   cHaNeutral100,
 			BgColor:     cHaNeutral900,
-			TextMessage: now.Format("3:04 PM"),
+			TextMessage: clockText(now),
 		},
 	}
+}
+
+// alwaysOnTexts is the in-place text patch that brings alwaysOn's Text
+// elements up to date for now, without reinstalling the layout.
+func alwaysOnTexts(now time.Time) []frame.TextUpdate {
+	return []frame.TextUpdate{
+		{ID: idHeader, TextMessage: headerText(now)},
+		{ID: idTime, TextMessage: clockText(now)},
+	}
+}
+
+func headerText(now time.Time) string {
+	return strings.ToUpper(now.Weekday().String()) + " · " + now.Format("01-02-2006")
+}
+
+func clockText(now time.Time) string {
+	return now.Format("3:04 PM")
 }
 
 // pipeAt returns a Mount.Format closure that picks segment i of a

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/dragonpaw/divoom/internal/adb"
+	"github.com/dragonpaw/divoom/internal/frame"
 	"github.com/dragonpaw/divoom/internal/render"
 	"github.com/dragonpaw/divoom/internal/scene"
 	"github.com/dragonpaw/divoom/internal/widget"
@@ -40,11 +41,34 @@ func runServe(ctx context.Context) error {
 		Scenes:   scenes,
 	}
 	logStartup(driver)
+	go tickClock(ctx, client)
 
 	if err := driver.Run(ctx); err != nil {
 		slog.Error("scene driver returned", "err", err)
 	}
 	return nil
+}
+
+// tickClock keeps the always-on clock and date current between scene
+// reinstalls (which only happen every scene.SceneDuration): at each
+// minute boundary it patches their Text elements in place. Failures are
+// expected while the frame reboots or a reinstall is in flight, and the
+// next tick or install corrects the text, so they're only debug-logged.
+func tickClock(ctx context.Context, client *frame.Client) {
+	for {
+		now := time.Now()
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(now.Truncate(time.Minute).Add(time.Minute).Sub(now)):
+		}
+		updCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		err := client.UpdateTexts(updCtx, alwaysOnTexts(time.Now()))
+		cancel()
+		if err != nil {
+			slog.Debug("clock update failed", "err", err)
+		}
+	}
 }
 
 // counter is the optional Count() interface implemented by static quote
