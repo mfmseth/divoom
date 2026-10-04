@@ -9,21 +9,21 @@ instead of the stock app's locked preset dials.
 
 ## What it shows
 
-One scene, four rows, all sized to be read from across a room:
+One screen, sized to be read from across a room:
 
+- **Header** — `WEEKDAY · MM-DD-YYYY`, then a big 12-hour clock
+  (`3:04 PM`).
 - **Weather** — current condition + temperature from Home Assistant
-  (`weather.forecast_home`), plain clock-orange text. A cloud icon (rain
-  streaks or snow dots) bakes into the background when today's daily
-  forecast calls for it.
-- **Upstairs / Downstairs / Bedroom** — one row per area, each showing
-  `AREA · temp°`, color-coded so activity/temperature reads at a glance:
-  **orange** when that area is occupied or has a light on, otherwise banded
-  by comfort (aqua cold, green comfortable, yellow warm, red hot).
+  (`weather.forecast_home`), e.g. `CLOUDY 61°`, with a sun / rain / snow
+  icon to its left picked from today's daily forecast. Long Home Assistant
+  states are shortened so they fit (`PT CLOUDY`, `STORMS`, `SLEET`, …).
+- **Upstairs / Downstairs / Bedroom** — one row per area, `AREA temp°`.
+  A small orange square appears left of the name while that area is
+  occupied; the row dims to the accent color when its thermostat is
+  offline (`—`).
 
-The always-on header (shared with every scene, though there's only one now)
-has the weekday on the left and today's date (`MM-DD-YYYY`) on the right,
-both the same size, plus the big clock and a year-progress bar along the
-bottom edge.
+Weather and room rows share one font size (78), the largest that still fits
+`DOWNSTAIRS 76°` plus its occupancy square on the 800px-wide screen.
 
 ## Why a fork this stripped-down
 
@@ -39,12 +39,11 @@ Assistant instance's REST API.
 ## Hardware constraints that shaped the layout
 
 - **6 Text elements, total, forever.** The device caps Text-type elements
-  at 6 across the *entire* install. The always-on header uses 1 (the date;
-  the weekday and clock are the non-Text `Week`/`Time` built-in types,
-  free of this cap), leaving 5 for the active scene — exactly what this
-  one uses (weather + 3 area rows). Exceeding 6 doesn't error; the device
-  silently drops whichever Text element lands last in the array. Every row
-  in this scene earned its slot the hard way — see the commit history
+  at 6 across the *entire* install. The header uses 2 (date line and
+  clock), leaving 4 for the scene — exactly what it uses (weather + 3
+  rooms). The weather icon and occupancy squares are Image elements, which
+  don't count. Exceeding 6 doesn't error; the device silently drops
+  whichever Text element lands last in the array — see the commit history
   around 2026-09-18 for the saga of area rows silently vanishing until
   this was understood.
 - **The device clips, it doesn't wrap.** Text that overflows its box width
@@ -74,24 +73,40 @@ go run ./cmd/divoom push           # adb-push the scene backgrounds + fonts
 go run ./cmd/divoom serve          # the dashboard daemon
 ```
 
-### Required environment
+### Environment
 
-| Variable | Purpose |
-|---|---|
-| `HA_URL` | Base URL of your Home Assistant instance, e.g. `http://10.0.0.7:8123` |
-| `HA_TOKEN` | A long-lived access token (HA UI → profile → Security → Long-Lived Access Tokens) |
+Copy `.env.example` to `.env` (gitignored, keep it `chmod 600` — it holds
+the HA token). These are the only variables the code reads:
 
-`DIVOOM_FRAME_IP` skips cloud discovery and talks to a known device
-directly — recommended, since the upstream cloud discovery endpoint
-(`app.divoom-gz.com`) has a documented history of being unreachable (see
-`docs/api.md`). `DIVOOM_FRAME_MAC` pins to a specific frame if you have more
-than one.
+| Variable | Required | Purpose |
+|---|---|---|
+| `HA_URL` | yes | Base URL of your Home Assistant instance, e.g. `http://10.0.0.7:8123` |
+| `HA_TOKEN` | yes | A long-lived access token (HA UI → profile → Security → Long-Lived Access Tokens) |
+| `DIVOOM_FRAME_IP` | recommended | Talk to the frame at this LAN IP and skip cloud discovery, whose upstream endpoint (`app.divoom-gz.com`) has a history of being unreachable (see `docs/api.md`) |
+| `DIVOOM_FRAME_MAC` | no | Pin cloud discovery to one frame if you have several (ignored when `DIVOOM_FRAME_IP` is set) |
+| `TZ` | no | Timezone for the clock and date; defaults to `America/Los_Angeles` |
+| `ADB_SERIAL` | no | Which adb device `push` targets when more than one is attached; set in the shell, not `.env` |
 
 The `homeassistant` widget's entity IDs (which areas, which climate/
 occupancy/light entities belong to each) are hardcoded in
 `internal/widget/homeassistant/homeassistant.go` for this specific home —
-not env-configurable, the same tradeoff the upstream `hnKeywords` list in
-`serve.go` made.
+not env-configurable.
+
+## Deploy
+
+Runs on the `divoom` LXC (Proxmox CT 103, 10.0.0.235) with the frame
+USB-attached, from a checkout at `/opt/divoom`:
+
+```
+cd /opt/divoom
+git pull
+docker compose build && docker compose up -d
+docker exec divoom-dashboard divoom push   # after any layout/background change
+```
+
+`push` ends by restarting the frame's app (~5s) so it reloads fonts; restart
+the daemon afterwards (`docker restart divoom-dashboard`) so the new layout
+installs immediately instead of at the next 3-minute scene cycle.
 
 ## Architecture
 
