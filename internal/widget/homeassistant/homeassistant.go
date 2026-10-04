@@ -3,7 +3,7 @@
 // pipe-separated
 // "<weather text>|<icon>|<presence>|<upstairs>|<downstairs>|<bedroom>"
 // string for the homeassistant scene. Each area field is
-// "AREA · temp°@FLAGS" — a short display text plus a hidden "@FLAGS"
+// "AREA temp°@FLAGS" — a short display text plus a hidden "@FLAGS"
 // suffix ("OCC" or empty) the scene uses only to decide whether to show
 // an occupancy mark, never displays — see fetchArea. icon is "rain",
 // "snow", or "" depending on today's forecast.
@@ -104,7 +104,7 @@ func (c *Client) getState(ctx context.Context, entityID string) (*haState, error
 
 // Fetch queries all configured entities in parallel and folds them into
 // "<weather>|<icon>|<presence>|<upstairs>|<downstairs>|<bedroom>",
-// each area field formatted as "AREA · temp°@FLAGS" (see fetchArea — the
+// each area field formatted as "AREA temp°@FLAGS" (see fetchArea — the
 // scene splits off "@FLAGS" to decide the occupancy mark and never
 // displays it). A failed individual lookup degrades that one piece
 // rather than failing the whole scene — a single down entity shouldn't
@@ -149,6 +149,27 @@ func (c *Client) Fetch(ctx context.Context) (string, error) {
 	return weatherText + "|" + icon + "|" + presence + "|" + strings.Join(areaText, "|"), nil
 }
 
+// shortConditions renames the Home Assistant weather states whose
+// uppercase form is too wide to fit the scene's large weather row
+// (the device clips rather than wraps) to a shorter word that means
+// the same thing.
+var shortConditions = map[string]string{
+	"clear-night":     "CLEAR",
+	"exceptional":     "EXTREME",
+	"lightning-rainy": "STORMS",
+	"partlycloudy":    "PT CLOUDY",
+	"snowy-rainy":     "SLEET",
+	"windy-variant":   "WINDY",
+}
+
+// conditionLabel returns the display word for a weather entity state.
+func conditionLabel(state string) string {
+	if short, ok := shortConditions[state]; ok {
+		return short
+	}
+	return strings.ToUpper(state)
+}
+
 // forecastDay is the one field we need out of weather.get_forecasts'
 // daily response.
 type forecastDay struct {
@@ -162,13 +183,13 @@ type forecastDay struct {
 func (c *Client) fetchWeather(ctx context.Context) (text, icon string) {
 	s, err := c.getState(ctx, c.weatherEntity)
 	if err != nil || s == nil {
-		return "WEATHER · —", ""
+		return "WEATHER —", ""
 	}
 	temp := "—"
 	if t, ok := s.Attributes["temperature"].(float64); ok {
 		temp = strconv.Itoa(int(t)) + "°"
 	}
-	text = strings.ToUpper(s.State) + " · " + temp
+	text = conditionLabel(s.State) + " " + temp
 
 	today, err := c.fetchTodayForecast(ctx)
 	if err != nil || today == "" {
@@ -233,7 +254,7 @@ func iconFor(condition string) string {
 }
 
 // fetchArea queries one area's climate and occupancy entities
-// concurrently and folds them into "AREA · temp°@FLAGS" -- the "@FLAGS"
+// concurrently and folds them into "AREA temp°@FLAGS" -- the "@FLAGS"
 // suffix ("OCC" or empty) is a hidden sub-field the scene strips before
 // display and uses only to decide whether to show an occupancy mark.
 func (c *Client) fetchArea(ctx context.Context, a area) string {
@@ -268,6 +289,6 @@ func (c *Client) fetchArea(ctx context.Context, a area) string {
 	if occupied {
 		flags = "OCC"
 	}
-	text := strings.ToUpper(a.name) + " · " + temp
+	text := strings.ToUpper(a.name) + " " + temp
 	return text + "@" + flags
 }

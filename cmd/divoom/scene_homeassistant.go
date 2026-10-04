@@ -16,7 +16,7 @@ import (
 // reserved accent (occupancy only), centered throughout. The widget
 // emits "<weather>|<icon>|<presence>|<upstairs>|<downstairs>|<bedroom>"
 // — presence is fetched but not displayed (pre-existing, unrelated to
-// this scene's layout). Each room field is "AREA · temp°@FLAGS": the
+// this scene's layout). Each room field is "AREA temp°@FLAGS": the
 // "@FLAGS" suffix is stripped before display and used only to decide
 // whether that room's occupancy mark shows.
 //
@@ -35,8 +35,8 @@ func homeAssistantScene(widgets map[string]widget.Widget) *scene.Scene {
 	elements := []frame.DispElement{
 		{
 			ID: idSceneWeather, Type: "Text",
-			StartX: 40, StartY: 393, Width: 720, Height: 56,
-			Align: 2, FontSize: 47, FontID: fontArchivoSemiBold,
+			StartX: 40, StartY: haWeatherY, Width: 720, Height: haRowHeight,
+			Align: 2, FontSize: haTextSize, FontID: fontArchivoSemiBold,
 			FontColor: cHaTextAccent, BgColor: cHaNeutral900,
 		},
 		{
@@ -44,7 +44,7 @@ func homeAssistantScene(widgets map[string]widget.Widget) *scene.Scene {
 			// activation from the widget's icon field and the weather
 			// text's measured width (see positionDynamicMarks).
 			ID: idSceneWeatherIcon, Type: "Image",
-			StartX: haMarkOffscreenX, StartY: 400,
+			StartX: haMarkOffscreenX, StartY: haWeatherY + (haRowHeight-haWeatherIconSize)/2,
 			Width: haWeatherIconSize, Height: haWeatherIconSize,
 			Url: haIconSunPath, ImgLocalFlag: 1,
 			FontSize: 1, FontID: fontArchivoSemiBold,
@@ -54,8 +54,8 @@ func homeAssistantScene(widgets map[string]widget.Widget) *scene.Scene {
 	for i, y := range haRoomY {
 		elements = append(elements, frame.DispElement{
 			ID: idSceneRoomBase + i, Type: "Text",
-			StartX: 40, StartY: y, Width: 720, Height: haRoomHeight,
-			Align: 2, FontSize: 61, FontID: fontArchivoSemiBold,
+			StartX: 40, StartY: y, Width: 720, Height: haRowHeight,
+			Align: 2, FontSize: haTextSize, FontID: fontArchivoSemiBold,
 			FontColor: cHaNeutral100, BgColor: cHaNeutral900,
 		})
 	}
@@ -68,7 +68,7 @@ func homeAssistantScene(widgets map[string]widget.Widget) *scene.Scene {
 			// require Font/Color fields even though they're
 			// semantically meaningless for images".
 			ID: idSceneMarkBase + i, Type: "Image",
-			StartX: haMarkOffscreenX, StartY: y + (haRoomHeight-haMarkSize)/2,
+			StartX: haMarkOffscreenX, StartY: y + (haRowHeight-haMarkSize)/2,
 			Width: haMarkSize, Height: haMarkSize,
 			Url: haOccupancyMarkPath, ImgLocalFlag: 1,
 			FontSize: 1, FontID: fontArchivoSemiBold,
@@ -97,12 +97,20 @@ func homeAssistantScene(widgets map[string]widget.Widget) *scene.Scene {
 // haRoomY is the top y-coordinate of each room row, in display order
 // (Upstairs / Downstairs / Bedroom) — index i's pipe field is at
 // position 3+i in the widget's raw string.
-var haRoomY = [3]int{536, 666, 796}
+var haRoomY = [3]int{650, 820, 990}
 
-const haRoomHeight = 61
+// haTextSize is shared by the weather and room rows: as large as
+// "DOWNSTAIRS 76°" can go and still fit, with its occupancy mark, in
+// the 800px-wide canvas (the device clips text, it doesn't wrap), so
+// the readings are legible from across the room.
+const (
+	haTextSize  = 78
+	haRowHeight = 95
+	haWeatherY  = 460
+)
 
 // roomRow returns a Mount.Format closure that picks segment i (one of
-// the widget's "AREA · temp°@FLAGS" strings) and strips the hidden
+// the widget's "AREA temp°@FLAGS" strings) and strips the hidden
 // "@FLAGS" suffix before display. An offline room's temp field is
 // already "—" (see fetchArea's zero value), which is what drives the
 // dimmer accent text color here.
@@ -113,7 +121,7 @@ func roomRow(i int) func(raw string) (text, color string) {
 			return "", ""
 		}
 		text, _, _ = strings.Cut(field, "@")
-		if strings.HasSuffix(text, "· —") {
+		if strings.HasSuffix(text, " —") {
 			return text, cHaTextAccent
 		}
 		return text, cHaNeutral100
@@ -125,8 +133,8 @@ func roomRow(i int) func(raw string) (text, color string) {
 // parks it (and the weather icon, when not positioned yet) off the
 // 800px canvas.
 const (
-	haMarkSize       = 28
-	haMarkGap        = 19
+	haMarkSize       = 36
+	haMarkGap        = 24
 	haMarkOffscreenX = -haMarkSize
 	haRoomBoxCenterX = CanvasW / 2
 )
@@ -175,12 +183,12 @@ func iconPathFor(icon string) string {
 func positionDynamicMarks(_ time.Time, raw string, elements []frame.DispElement) {
 	setElementURL(elements, idSceneWeatherIcon, iconPathFor(weatherPipeField(raw, 1)))
 	setElementX(elements, idSceneWeatherIcon,
-		leftOfCenteredText(elements, idSceneWeather, 47, haWeatherIconSize, haWeatherIconGap))
+		leftOfCenteredText(elements, idSceneWeather, haTextSize, haWeatherIconSize, haWeatherIconGap))
 
 	for i := range haRoomY {
 		markX := haMarkOffscreenX
 		if roomOccupied(raw, 3+i) {
-			markX = leftOfCenteredText(elements, idSceneRoomBase+i, 61, haMarkSize, haMarkGap)
+			markX = leftOfCenteredText(elements, idSceneRoomBase+i, haTextSize, haMarkSize, haMarkGap)
 		}
 		setElementX(elements, idSceneMarkBase+i, markX)
 	}

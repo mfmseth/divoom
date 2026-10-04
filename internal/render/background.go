@@ -345,14 +345,15 @@ var (
 	haTextAccent = color.RGBA{0xff, 0x97, 0x83, 0xff}
 )
 
-// Divider-rule geometry, matching the design review's y-positions
-// exactly (canvas is already at the review's 800x1280 scale).
+// Divider-rule geometry. haDivider2Y sits in the gap between the
+// weather row and the first room row (cmd/divoom/scene_homeassistant.go's
+// haWeatherY / haRoomY).
 const (
 	haDividerX0    = 40
 	haDividerX1    = CanvasW - 40
 	haDividerThick = 5
 	haDivider1Y    = 122
-	haDivider2Y    = 501
+	haDivider2Y    = 600
 )
 
 // SceneHomeAssistantBackground bakes the homeassistant scene's bg: a
