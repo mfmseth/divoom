@@ -145,7 +145,7 @@ const (
 // not listed here hides the row. Keep in sync with that helper's template.
 var wearPhrases = func() []string {
 	var out []string
-	for _, base := range []string{"SHORTS", "T-SHIRT", "LONG SLEEVES", "LIGHT JACKET", "JACKET", "WARM COAT"} {
+	for _, base := range []string{"SHORTS", "T-SHIRT", "LONG SLEEVES", "HOODIE", "JACKET", "WARM COAT"} {
 		for _, extra := range []string{"", " + UMBRELLA", " + BOOTS"} {
 			out = append(out, base+extra)
 		}

@@ -69,7 +69,7 @@ func TestWearPathsAreDistinct(t *testing.T) {
 		}
 		seen[path] = phrase
 	}
-	if got := wearPath("LIGHT JACKET + UMBRELLA"); got != "/userdata/wallclock_wear_light_jacket_umbrella.png" {
+	if got := wearPath("LONG SLEEVES + UMBRELLA"); got != "/userdata/wallclock_wear_long_sleeves_umbrella.png" {
 		t.Errorf("wearPath = %q", got)
 	}
 }

@@ -10,7 +10,7 @@
 // no request to Home Assistant succeeded this Fetch, StatusISPDown when
 // HA answered but none of UniFi's WAN latency probes has a reading,
 // otherwise "". wear is the "What to Wear" template helper's state (e.g.
-// "LIGHT JACKET + UMBRELLA"), or "" when it can't be read.
+// "HOODIE + UMBRELLA"), or "" when it can't be read.
 package homeassistant
 
 import (

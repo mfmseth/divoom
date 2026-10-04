@@ -19,7 +19,7 @@ One screen, sized to be read from across a room:
   icon to its left picked from today's daily forecast. Long Home Assistant
   states are shortened so they fit (`PT CLOUDY`, `STORMS`, `SLEET`, …).
 - **What to wear** — a smaller line under the weather, e.g.
-  `LIGHT JACKET + UMBRELLA`, from Home Assistant's `sensor.what_to_wear`
+  `HOODIE + UMBRELLA`, from Home Assistant's `sensor.what_to_wear`
   (Gemini's pick from the forecast, with a rule-based fallback — see
   [Home Assistant setup](#home-assistant-setup)). Hidden if the sensor
   reports a phrase the frame doesn't have an image for.
