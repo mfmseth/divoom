@@ -1,7 +1,6 @@
-// Text rasterisation helpers for baked-in chrome (labels drawn into bg
-// JPGs at render time, rather than as device Text elements). Used by
-// drawWeatherChrome here and by cmd/divoom/scene_baked.go for the NASA /
-// cocktail title rows.
+// Text rasterisation helpers: labels drawn into rendered images (the
+// `divoom render` header preview), and text measurement for placing the
+// homeassistant scene's icons next to device Text elements.
 //
 // LoadFont resolves a TTF basename under fonts/ — tries the repo-root
 // path first, then ../../fonts/ as a fallback for `go test ./...` runs
@@ -62,8 +61,7 @@ func LoadFont(name string) (*opentype.Font, error) {
 }
 
 // drawLabelCentered paints s in the given face, centred horizontally on
-// cx with its baseline at baselineY, in colour c. Used by
-// drawWeatherChrome for the column labels.
+// cx with its baseline at baselineY, in colour c.
 func drawLabelCentered(img *image.RGBA, s string, face font.Face, cx, baselineY int, c color.RGBA) {
 	w := font.MeasureString(face, s)
 	dotX := fixed.I(cx) - w/2
@@ -87,23 +85,9 @@ func drawLabelLeft(img *image.RGBA, s string, face font.Face, x, baselineY int, 
 	d.DrawString(s)
 }
 
-// drawLabelRight paints s with its right edge at x and baseline at baselineY.
-func drawLabelRight(img *image.RGBA, s string, face font.Face, x, baselineY int, c color.RGBA) {
-	w := font.MeasureString(face, s)
-	dotX := fixed.I(x) - w
-	d := &font.Drawer{
-		Dst:  img,
-		Src:  image.NewUniform(c),
-		Face: face,
-		Dot:  fixed.Point26_6{X: dotX, Y: fixed.I(baselineY)},
-	}
-	d.DrawString(s)
-}
-
 // MeasureLabel returns the pixel width of s rendered in the given font/size.
-// Used by callers that need to know where a baked label ends so they can
-// align device Text elements next to it (e.g. terminal-family scenes
-// placing a dynamic headword after a baked "$ define " prompt).
+// Used to place the weather icon and occupancy marks just left of the
+// homeassistant scene's centered Text elements.
 func MeasureLabel(s, fontName string, size float64) (int, error) {
 	f, err := LoadFont(fontName)
 	if err != nil {

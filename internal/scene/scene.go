@@ -188,9 +188,9 @@ type Driver struct {
 	// what we send. Length differs = clean slate.
 	lastDispListLen atomic.Int64
 
-	pickMu     sync.Mutex
-	rng        *rand.Rand
-	lastShown  map[*Scene]time.Time
+	pickMu    sync.Mutex
+	rng       *rand.Rand
+	lastShown map[*Scene]time.Time
 }
 
 // SceneCooldown is the minimum interval before the same scene can be
@@ -390,42 +390,6 @@ func (d *Driver) warmup(ctx context.Context) {
 		}()
 	}
 	wg.Wait()
-}
-
-// RenderElements applies the scene's Mounts (and OnActivate, if any) to
-// the static Elements list using `raw` as the widget output and `now` as
-// the wall-clock. Returns the resulting element slice without installing
-// anything on a device — used by the offline screenshot baker so a scene
-// can be previewed with realistic dynamic content.
-func (s *Scene) RenderElements(raw string, now time.Time) []frame.DispElement {
-	bottom := make([]frame.DispElement, len(s.Elements))
-	copy(bottom, s.Elements)
-	for _, m := range s.Mounts {
-		for i, e := range bottom {
-			if e.ID != m.ID {
-				continue
-			}
-			text, color := raw, ""
-			if m.Format != nil {
-				text, color = m.Format(raw)
-			}
-			if text == "" && !m.AllowEmpty {
-				text = "—"
-			}
-			bottom[i].TextMessage = text
-			if color != "" {
-				bottom[i].FontColor = color
-			}
-			if m.Geometry != nil {
-				bottom[i] = m.Geometry(text, bottom[i])
-			}
-			break
-		}
-	}
-	if s.OnActivate != nil {
-		s.OnActivate(now, raw, bottom)
-	}
-	return bottom
 }
 
 // activate bakes the scene's cached widget value into its Text elements
