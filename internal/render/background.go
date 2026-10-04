@@ -10,6 +10,7 @@ import (
 	"image/draw"
 	"image/jpeg"
 	"image/png"
+	"math"
 	"time"
 
 	"golang.org/x/image/font"
@@ -132,61 +133,84 @@ func OccupancyMarkPNG(size int) ([]byte, error) {
 // rain, snow) as a standalone asset: a neutral-900 backdrop exactly
 // matching the scene's flat background (so it blends in seamlessly
 // without needing real alpha transparency) with the glyph painted in
-// haTextAccent on top, sized to fill it.
+// haTextAccent on top, scaled to fill a size×size box.
 func WeatherIconPNG(kind string, size int) ([]byte, error) {
 	img := image.NewRGBA(image.Rect(0, 0, size, size))
 	draw.Draw(img, img.Bounds(), &image.Uniform{haNeutral900}, image.Point{}, draw.Src)
-	cx, cy := size/2, size/2
+	g := iconGrid{cx: size / 2, cy: size / 2, scale: float64(size) / iconDesignSize}
 	switch kind {
 	case "rain":
-		drawRainCloud(img, cx, cy, haTextAccent)
+		drawRainCloud(img, g, haTextAccent)
 	case "snow":
-		drawSnowCloud(img, cx, cy, haTextAccent)
+		drawSnowCloud(img, g, haTextAccent)
 	default:
-		drawSunIcon(img, cx, cy, haTextAccent)
+		drawSunIcon(img, g, haTextAccent)
 	}
 	return encodeImage(img, FormatPNG)
+}
+
+// iconDesignSize is the box size the icon shapes below were drawn for;
+// iconGrid scales their pixel offsets to whatever size is requested.
+const iconDesignSize = 42
+
+// iconGrid maps the icon shapes' design-size pixel offsets onto the
+// actual image: (cx, cy) is the center, scale the size/iconDesignSize ratio.
+type iconGrid struct {
+	cx, cy int
+	scale  float64
+}
+
+// px scales a design-size offset or length to real pixels.
+func (g iconGrid) px(v int) int {
+	return int(math.Round(float64(v) * g.scale))
+}
+
+// rect returns the rectangle spanning design-size offsets (x0,y0)-(x1,y1)
+// from the center.
+func (g iconGrid) rect(x0, y0, x1, y1 int) image.Rectangle {
+	return image.Rect(g.cx+g.px(x0), g.cy+g.px(y0), g.cx+g.px(x1), g.cy+g.px(y1))
+}
+
+// circle fills a disc of design-size radius r at design-size offset (dx, dy).
+func (g iconGrid) circle(img *image.RGBA, dx, dy, r int, c color.RGBA) {
+	fillCircle(img, g.cx+g.px(dx), g.cy+g.px(dy), g.px(r), c)
 }
 
 // drawSunIcon paints a solid filled sun: a disc plus eight short rays,
 // matching the weight/simplicity of drawCloudBody's style rather than
 // tracing an SVG path.
-// Sized to sit inside a haWeatherIconSize (42x42) box around (cx, cy) —
-// see WeatherIconPNG, the only caller.
-func drawSunIcon(img *image.RGBA, cx, cy int, c color.RGBA) {
-	fillCircle(img, cx, cy, 8, c)
+func drawSunIcon(img *image.RGBA, g iconGrid, c color.RGBA) {
+	g.circle(img, 0, 0, 8, c)
 	for _, d := range [][2]int{{1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {1, -1}, {-1, 1}, {-1, -1}} {
-		rx, ry := cx+d[0]*15, cy+d[1]*15
-		fillCircle(img, rx, ry, 2, c)
+		g.circle(img, d[0]*15, d[1]*15, 2, c)
 	}
 }
 
 // drawCloudBody paints the cloud shape shared by drawRainCloud and
 // drawSnowCloud -- three overlapping circles plus a base rectangle.
-func drawCloudBody(img *image.RGBA, cx, cy int, c color.RGBA) {
-	fillCircle(img, cx-8, cy, 7, c)
-	fillCircle(img, cx, cy-5, 9, c)
-	fillCircle(img, cx+8, cy, 7, c)
-	draw.Draw(img, image.Rect(cx-14, cy, cx+14, cy+7), &image.Uniform{c}, image.Point{}, draw.Src)
+func drawCloudBody(img *image.RGBA, g iconGrid, c color.RGBA) {
+	g.circle(img, -8, 0, 7, c)
+	g.circle(img, 0, -5, 9, c)
+	g.circle(img, 8, 0, 7, c)
+	draw.Draw(img, g.rect(-14, 0, 14, 7), &image.Uniform{c}, image.Point{}, draw.Src)
 }
 
 // drawRainCloud draws the shared cloud body plus three short vertical
 // streaks beneath it, both in c (same slot, same size, same color as
 // the text it sits beside — see the design review's icon-swap note).
-func drawRainCloud(img *image.RGBA, cx, cy int, c color.RGBA) {
-	drawCloudBody(img, cx, cy, c)
+func drawRainCloud(img *image.RGBA, g iconGrid, c color.RGBA) {
+	drawCloudBody(img, g, c)
 	for _, dx := range []int{-7, 0, 7} {
-		draw.Draw(img, image.Rect(cx+dx-1, cy+9, cx+dx+1, cy+17),
-			&image.Uniform{c}, image.Point{}, draw.Src)
+		draw.Draw(img, g.rect(dx-1, 9, dx+1, 17), &image.Uniform{c}, image.Point{}, draw.Src)
 	}
 }
 
 // drawSnowCloud draws the shared cloud body plus three small dots
 // beneath it, both in c.
-func drawSnowCloud(img *image.RGBA, cx, cy int, c color.RGBA) {
-	drawCloudBody(img, cx, cy, c)
+func drawSnowCloud(img *image.RGBA, g iconGrid, c color.RGBA) {
+	drawCloudBody(img, g, c)
 	for _, dx := range []int{-7, 0, 7} {
-		fillCircle(img, cx+dx, cy+13, 2, c)
+		g.circle(img, dx, 13, 2, c)
 	}
 }
 

@@ -44,7 +44,7 @@ func homeAssistantScene(widgets map[string]widget.Widget) *scene.Scene {
 			// activation from the widget's icon field and the weather
 			// text's measured width (see positionDynamicMarks).
 			ID: idSceneWeatherIcon, Type: "Image",
-			StartX: haMarkOffscreenX, StartY: haWeatherY + (haRowHeight-haWeatherIconSize)/2,
+			StartX: -haWeatherIconSize, StartY: haWeatherY + (haRowHeight-haWeatherIconSize)/2,
 			Width: haWeatherIconSize, Height: haWeatherIconSize,
 			Url: haIconSunPath, ImgLocalFlag: 1,
 			FontSize: 1, FontID: fontArchivoSemiBold,
@@ -130,8 +130,7 @@ func roomRow(i int) func(raw string) (text, color string) {
 
 // Occupancy-mark geometry. The mark sits haMarkGap px left of the
 // room's centered text, vertically centered in the row; haMarkOffscreenX
-// parks it (and the weather icon, when not positioned yet) off the
-// 800px canvas.
+// parks it off the 800px canvas when the room is unoccupied.
 const (
 	haMarkSize       = 36
 	haMarkGap        = 24
@@ -143,7 +142,7 @@ const (
 // weather row's sun/rain/snow glyph, which sits haWeatherIconGap px
 // left of the (centered) weather text.
 const (
-	haWeatherIconSize = 42
+	haWeatherIconSize = 64
 	haWeatherIconGap  = 14
 )
 
@@ -204,7 +203,7 @@ func leftOfCenteredText(elements []frame.DispElement, textID int, fontSize float
 	text := elementText(elements, textID)
 	w, err := render.MeasureLabel(text, archivoSemiBoldFile, fontSize)
 	if err != nil {
-		return haMarkOffscreenX
+		return -elementSize
 	}
 	return haRoomBoxCenterX - w/2 - gap - elementSize
 }
