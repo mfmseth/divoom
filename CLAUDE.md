@@ -271,3 +271,40 @@ If any answer is "no" or "not sure," you are not done.
 In each case, explain *why* in terms of the laws above. The user can
 override — that's their call — but they should make that override
 knowingly.
+
+---
+
+# Working in this repo (notes for Claude)
+
+Facts about *this* deployment, so a fresh session doesn't have to rediscover
+them. The user-facing details are in README.md — keep both in sync when a
+change touches layout, HA entities, env vars or deploy steps.
+
+- **Where it runs:** LXC 103 on Proxmox host `pve` (10.0.0.235), checkout
+  `/opt/divoom`, container `divoom-dashboard`. Direct root SSH to the LXC is
+  refused; use `ssh pve 'pct exec 103 -- sh -c "..."'`. The frame is
+  10.0.0.234 (`:9000/divoom_api`), USB-attached to the LXC for adb.
+- **Deploy:** commit, push to `main` (owner bypasses the PR ruleset), then
+  on the LXC `git pull --ff-only && docker compose build && docker compose
+  up -d`. Anything that changes a pushed asset (background, icons, banners,
+  wear phrases, fonts) also needs `docker exec divoom-dashboard divoom push`,
+  which restarts the frame's app; wait for `:9000` to answer again, then
+  `docker restart divoom-dashboard` so the layout reinstalls right away.
+  Check `docker logs` for the `scene active` line and its raw text.
+- **Verify before deploying:** `go vet ./... && go test ./...` (plus
+  `staticcheck`). There is no Go on the jumphost by default and GitHub
+  Actions has never run on this fork, so don't wait for CI — run the
+  checks yourself (local Go install, or `docker run golang:1.25` on the LXC).
+- **You can't see the screen.** No screenshot API exists. Check layout math
+  with real font metrics (fonts are in `fonts/`, gitignored — fetch with
+  `scripts/download-fonts.sh`) or a mock render, and ask the user to look.
+- **Device limits that bite:** 6 Text elements total (all used: header,
+  clock, weather, 3 rooms), 10 Images; text clips instead of wrapping. New
+  dynamic text therefore means a fixed phrase list rendered to images.
+- **Raw widget string** (`internal/widget/homeassistant`):
+  `weather|icon|presence|upstairs|downstairs|bedroom|status|wear`, where
+  status is `""`, `DOWN` (HA unreachable) or `ISP_DOWN`. Adding a field
+  means appending, so existing indexes stay valid.
+- **HA side:** see README "Home Assistant setup". The what-to-wear phrase
+  list is duplicated between HA (`input_select.what_to_wear_ai`) and
+  `wearPhrases`; change both.

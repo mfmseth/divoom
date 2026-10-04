@@ -12,15 +12,25 @@ instead of the stock app's locked preset dials.
 One screen, sized to be read from across a room:
 
 - **Header** — `WEEKDAY · MM-DD-YYYY`, then a big 12-hour clock
-  (`3:04 PM`).
+  (`3:04 PM`). Both are our own Text elements (the device's built-in clock
+  can't show AM/PM), patched in place every minute between scene installs.
 - **Weather** — current condition + temperature from Home Assistant
   (`weather.forecast_home`), e.g. `CLOUDY 61°`, with a sun / rain / snow
   icon to its left picked from today's daily forecast. Long Home Assistant
   states are shortened so they fit (`PT CLOUDY`, `STORMS`, `SLEET`, …).
+- **What to wear** — a smaller line under the weather, e.g.
+  `LIGHT JACKET + UMBRELLA`, from Home Assistant's `sensor.what_to_wear`
+  (Gemini's pick from the forecast, with a rule-based fallback — see
+  [Home Assistant setup](#home-assistant-setup)). Hidden if the sensor
+  reports a phrase the frame doesn't have an image for.
 - **Upstairs / Downstairs / Bedroom** — one row per area, `AREA temp°`.
   A small orange square appears left of the name while that area is
   occupied; the row dims to the accent color when its thermostat is
   offline (`—`).
+- **Alert banner** — a red bar in the empty space at the bottom, only when
+  something is wrong: `HOME ASSISTANT DOWN` when no request to HA succeeds,
+  or `INTERNET DOWN` when HA answers but none of UniFi's WAN/WAN2 latency
+  probes has a reading (so a failover to WAN2 doesn't alarm).
 
 Weather and room rows share one font size (78), the largest that still fits
 `DOWNSTAIRS 76°` plus its occupancy square on the 800px-wide screen.
@@ -41,8 +51,11 @@ Assistant instance's REST API.
 - **6 Text elements, total, forever.** The device caps Text-type elements
   at 6 across the *entire* install. The header uses 2 (date line and
   clock), leaving 4 for the scene — exactly what it uses (weather + 3
-  rooms). The weather icon and occupancy squares are Image elements, which
-  don't count. Exceeding 6 doesn't error; the device silently drops
+  rooms). Everything else — weather icon, occupancy squares, the
+  what-to-wear line, the alert banner — is an Image element (cap: 10),
+  pre-rendered and pushed by `divoom push`, then shown, swapped or parked
+  off-canvas per install. So any new *text* has to come from a fixed set of
+  pre-rendered phrases. Exceeding 6 doesn't error; the device silently drops
   whichever Text element lands last in the array — see the commit history
   around 2026-09-18 for the saga of area rows silently vanishing until
   this was understood.
@@ -92,6 +105,25 @@ occupancy/light entities belong to each) are hardcoded in
 `internal/widget/homeassistant/homeassistant.go` for this specific home —
 not env-configurable.
 
+## Home Assistant setup
+
+Besides the climate, occupancy, light and `weather.forecast_home` entities,
+the dashboard relies on these, all configured in the HA UI (no YAML):
+
+| Piece | What it is | Used for |
+|---|---|---|
+| UniFi Network integration | Host `10.0.0.1` (UCG Fiber), local account from 1Password item `unifi` | Source of the WAN latency sensors |
+| `sensor.ucg_fiber_{cloudflare,google,microsoft}_{wan,wan2}_latency` | UniFi's built-in WAN probes — **disabled by default in HA**, enabled by hand | `INTERNET DOWN` banner: down when none of the six has a number |
+| Google Gemini integration | API key from 1Password item `gemini` (Google AI Studio) | Provides `ai_task.google_ai_task` |
+| `automation.what_to_wear_ask_gemini` | Hourly at :05, 6am–10pm: sends Gemini the next 12 h of hourly forecast and makes it pick one option of `input_select.what_to_wear_ai`; stores the pick, a one-line reason (`input_text.what_to_wear_ai_reason`) and the time (`input_datetime.what_to_wear_ai_updated`) | AI what-to-wear |
+| `sensor.what_to_wear` | Template helper: Gemini's pick while under 3 h old, otherwise rules from current weather (°F tiers SHORTS ≥80 … WARM COAT <40, wind ≥15 mph counts 5° colder, `+ UMBRELLA` for rain, `+ BOOTS` for snow) | The line the frame shows |
+
+**The 18 what-to-wear phrases live in two places** and must change
+together: the options of `input_select.what_to_wear_ai` (and the rules in
+`sensor.what_to_wear`) in HA, and `wearPhrases` in
+`cmd/divoom/scene_homeassistant.go`, which pre-renders one image per phrase.
+After changing the Go list, redeploy and run `divoom push`.
+
 ## Deploy
 
 Runs on the `divoom` LXC (Proxmox CT 103, 10.0.0.235) with the frame
@@ -125,7 +157,8 @@ USB-attached frame without a separate dev-box step.
   └────────────────────────────────────┘                │ 800×1280 │
    ▲                                                     │ IPS LCD  │
    │ Home Assistant REST API (weather.forecast_home,     └──────────┘
-   │ climate.*, binary_sensor.*_occupancy_group, light.*)
+   │ climate.*, binary_sensor.*_occupancy_group, light.*,
+   │ sensor.what_to_wear, sensor.ucg_fiber_*_latency)
 ```
 
 ## Docs
