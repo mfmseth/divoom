@@ -1,6 +1,7 @@
 package main
 
 import (
+	"slices"
 	"strings"
 	"time"
 
@@ -77,6 +78,16 @@ func homeAssistantScene(widgets map[string]widget.Widget) *scene.Scene {
 		})
 	}
 
+	// Parked off-canvas; OnActivate shows it with the current phrase's image.
+	elements = append(elements, frame.DispElement{
+		ID: idSceneWear, Type: "Image",
+		StartX: -CanvasW, StartY: haWearY,
+		Width: CanvasW, Height: haWearHeight,
+		Url: wearPath(wearPhrases[0]), ImgLocalFlag: 1,
+		FontSize: 1, FontID: fontArchivoSemiBold,
+		FontColor: cHaNeutral100, BgColor: cHaNeutral900,
+	})
+
 	// Parked off-canvas; OnActivate brings it on-screen, with the
 	// matching image, only while Home Assistant or the internet is down.
 	elements = append(elements, frame.DispElement{
@@ -109,7 +120,7 @@ func homeAssistantScene(widgets map[string]widget.Widget) *scene.Scene {
 // haRoomY is the top y-coordinate of each room row, in display order
 // (Upstairs / Downstairs / Bedroom) — index i's pipe field is at
 // position 3+i in the widget's raw string.
-var haRoomY = [3]int{570, 740, 910}
+var haRoomY = [3]int{625, 785, 945}
 
 // haTextSize is shared by the weather and room rows: as large as
 // "DOWNSTAIRS 76°" can go and still fit, with its occupancy mark, in
@@ -120,6 +131,33 @@ const (
 	haRowHeight = 95
 	haWeatherY  = 385
 )
+
+// The what-to-wear line sits directly under the weather row.
+const (
+	haWearY      = haWeatherY + haRowHeight + 5
+	haWearHeight = 70
+)
+
+// wearPhrases is every state the "What to Wear" template helper in Home
+// Assistant (sensor.what_to_wear) can produce: a clothing tier plus an
+// optional rain/snow add-on. Each is pre-rendered and pushed as its own
+// image, since the device can't render new text into an Image; a state
+// not listed here hides the row. Keep in sync with that helper's template.
+var wearPhrases = func() []string {
+	var out []string
+	for _, base := range []string{"SHORTS", "T-SHIRT", "LONG SLEEVES", "LIGHT JACKET", "JACKET", "WARM COAT"} {
+		for _, extra := range []string{"", " + UMBRELLA", " + BOOTS"} {
+			out = append(out, base+extra)
+		}
+	}
+	return out
+}()
+
+// wearPath is the on-device path of phrase's pre-pushed label image.
+func wearPath(phrase string) string {
+	slug := strings.NewReplacer(" + ", "_", " ", "_", "-", "").Replace(strings.ToLower(phrase))
+	return "/userdata/wallclock_wear_" + slug + ".png"
+}
 
 // roomRow returns a Mount.Format closure that picks segment i (one of
 // the widget's "AREA temp°@FLAGS" strings) and strips the hidden
@@ -207,6 +245,8 @@ func iconPathFor(icon string) string {
 //     icon field and placed left of the weather text.
 //   - Each room's occupancy mark shows only when that room's raw field
 //     carries the "OCC" flag; otherwise it's parked off-canvas.
+//   - The what-to-wear line shows the image for the helper's current
+//     phrase, or is parked off-canvas if the phrase isn't one we pushed.
 //   - The red alert banner shows only while the widget reports Home
 //     Assistant or the internet down; otherwise it's parked off-canvas.
 func positionDynamicMarks(_ time.Time, raw string, elements []frame.DispElement) {
@@ -216,6 +256,13 @@ func positionDynamicMarks(_ time.Time, raw string, elements []frame.DispElement)
 		bannerX = 0
 	}
 	setElementX(elements, idSceneBanner, bannerX)
+
+	wearX := -CanvasW
+	if wear := weatherPipeField(raw, 7); slices.Contains(wearPhrases, wear) {
+		setElementURL(elements, idSceneWear, wearPath(wear))
+		wearX = 0
+	}
+	setElementX(elements, idSceneWear, wearX)
 
 	setElementURL(elements, idSceneWeatherIcon, iconPathFor(weatherPipeField(raw, 1)))
 	setElementX(elements, idSceneWeatherIcon,

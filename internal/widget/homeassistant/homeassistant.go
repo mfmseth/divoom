@@ -1,7 +1,7 @@
 // Package homeassistant queries a Home Assistant instance's REST API,
 // grouped by area (Upstairs / Downstairs / Bedroom), and emits a
 // pipe-separated
-// "<weather text>|<icon>|<presence>|<upstairs>|<downstairs>|<bedroom>|<status>"
+// "<weather text>|<icon>|<presence>|<upstairs>|<downstairs>|<bedroom>|<status>|<wear>"
 // string for the homeassistant scene. Each area field is
 // "AREA temp°@FLAGS" — a short display text plus a hidden "@FLAGS"
 // suffix ("OCC" or empty) the scene uses only to decide whether to show
@@ -9,7 +9,8 @@
 // "snow", or "" depending on today's forecast. status is StatusDown when
 // no request to Home Assistant succeeded this Fetch, StatusISPDown when
 // HA answered but none of UniFi's WAN latency probes has a reading,
-// otherwise "".
+// otherwise "". wear is the "What to Wear" template helper's state (e.g.
+// "LIGHT JACKET + UMBRELLA"), or "" when it can't be read.
 package homeassistant
 
 import (
@@ -42,6 +43,7 @@ type Client struct {
 
 	presenceEntity string
 	weatherEntity  string
+	wearEntity     string
 	areas          []area
 	// wanLatency are the UniFi integration's per-WAN latency probes
 	// (disabled by default in HA; enabled for this). Each reads a number
@@ -75,6 +77,7 @@ func New(baseURL, token string) *Client {
 		http:           &http.Client{Timeout: 10 * time.Second},
 		presenceEntity: "group.home_presence",
 		weatherEntity:  "weather.forecast_home",
+		wearEntity:     "sensor.what_to_wear",
 		wanLatency: []string{
 			"sensor.ucg_fiber_cloudflare_wan_latency",
 			"sensor.ucg_fiber_google_wan_latency",
@@ -134,7 +137,7 @@ func (c *Client) getState(ctx context.Context, entityID string) (*haState, error
 }
 
 // Fetch queries all configured entities in parallel and folds them into
-// "<weather>|<icon>|<presence>|<upstairs>|<downstairs>|<bedroom>|<status>",
+// "<weather>|<icon>|<presence>|<upstairs>|<downstairs>|<bedroom>|<status>|<wear>",
 // each area field formatted as "AREA temp°@FLAGS" (see fetchArea — the
 // scene splits off "@FLAGS" to decide the occupancy mark and never
 // displays it). A failed individual lookup degrades that one piece
@@ -176,6 +179,16 @@ func (c *Client) Fetch(ctx context.Context) (string, error) {
 		}()
 	}
 
+	var wear string
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		s, err := c.getState(ctx, c.wearEntity)
+		if err == nil && s != nil {
+			wear = s.State
+		}
+	}()
+
 	var wanUp atomic.Bool
 	for _, entityID := range c.wanLatency {
 		entityID := entityID
@@ -201,7 +214,7 @@ func (c *Client) Fetch(ctx context.Context) (string, error) {
 	case !wanUp.Load():
 		status = StatusISPDown
 	}
-	return weatherText + "|" + icon + "|" + presence + "|" + strings.Join(areaText, "|") + "|" + status, nil
+	return weatherText + "|" + icon + "|" + presence + "|" + strings.Join(areaText, "|") + "|" + status + "|" + wear, nil
 }
 
 // shortConditions renames the Home Assistant weather states whose

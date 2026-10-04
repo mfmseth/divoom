@@ -143,6 +143,16 @@ func pushSceneBackgrounds(ctx context.Context) error {
 		}
 	}
 
+	for _, phrase := range wearPhrases {
+		data, err := render.WearLabelPNG(phrase, CanvasW, haWearHeight)
+		if err != nil {
+			return fmt.Errorf("render wear label %q: %w", phrase, err)
+		}
+		if err := pushBytes(ctx, data, wearPath(phrase)); err != nil {
+			return fmt.Errorf("push %s: %w", wearPath(phrase), err)
+		}
+	}
+
 	for _, b := range haBanners {
 		data, err := render.AlertBannerPNG(b.text, CanvasW, haBannerHeight)
 		if err != nil {

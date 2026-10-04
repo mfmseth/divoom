@@ -58,3 +58,42 @@ func TestAlertBannerShowsOnlyWhenDown(t *testing.T) {
 		}
 	}
 }
+
+// Every phrase the HA helper can produce gets its own pushed image.
+func TestWearPathsAreDistinct(t *testing.T) {
+	seen := map[string]string{}
+	for _, phrase := range wearPhrases {
+		path := wearPath(phrase)
+		if prev, dup := seen[path]; dup {
+			t.Errorf("%q and %q both map to %s", prev, phrase, path)
+		}
+		seen[path] = phrase
+	}
+	if got := wearPath("LIGHT JACKET + UMBRELLA"); got != "/userdata/wallclock_wear_light_jacket_umbrella.png" {
+		t.Errorf("wearPath = %q", got)
+	}
+}
+
+// The wear line shows a known phrase's image and hides anything else.
+func TestWearRowShowsOnlyKnownPhrases(t *testing.T) {
+	wearRow := func(wear string) (x int, url string) {
+		raw := "CLOUDY 61°||HOME|UPSTAIRS 76°@|DOWNSTAIRS 77°@|BEDROOM 76°@||" + wear
+		elements := append([]frame.DispElement(nil), homeAssistantScene(nil).Elements...)
+		positionDynamicMarks(time.Now(), raw, elements)
+		for _, e := range elements {
+			if e.ID == idSceneWear {
+				return e.StartX, e.Url
+			}
+		}
+		t.Fatal("no wear element")
+		return 0, ""
+	}
+	if x, url := wearRow("LONG SLEEVES"); x != 0 || url != wearPath("LONG SLEEVES") {
+		t.Errorf("known phrase: x=%d url=%q", x, url)
+	}
+	for _, wear := range []string{"", "unavailable", "PARKA"} {
+		if x, _ := wearRow(wear); x+CanvasW > 0 {
+			t.Errorf("%q: wear row at x=%d, want off-canvas", wear, x)
+		}
+	}
+}

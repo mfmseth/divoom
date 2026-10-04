@@ -18,8 +18,8 @@ func fetchStatus(t *testing.T, handler http.HandlerFunc) string {
 		t.Fatalf("Fetch: %v", err)
 	}
 	parts := strings.Split(raw, "|")
-	if len(parts) != 7 {
-		t.Fatalf("Fetch = %q, want 7 pipe fields", raw)
+	if len(parts) != 8 {
+		t.Fatalf("Fetch = %q, want 8 pipe fields", raw)
 	}
 	return parts[6]
 }

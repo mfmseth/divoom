@@ -91,14 +91,14 @@ var (
 )
 
 // Divider-rule geometry. haDivider2Y sits in the gap between the
-// weather row and the first room row (cmd/divoom/scene_homeassistant.go's
+// what-to-wear row and the first room row (cmd/divoom/scene_homeassistant.go's
 // haWeatherY / haRoomY).
 const (
 	haDividerX0    = 40
 	haDividerX1    = CanvasW - 40
 	haDividerThick = 5
 	haDivider1Y    = 122
-	haDivider2Y    = 522
+	haDivider2Y    = 580
 )
 
 // SceneHomeAssistantBackground bakes the homeassistant scene's bg: a
@@ -134,9 +134,22 @@ func OccupancyMarkPNG(size int) ([]byte, error) {
 // it — the homeassistant scene's "HOME ASSISTANT DOWN" / "INTERNET DOWN"
 // alerts (see cmd/divoom/scene_homeassistant.go).
 func AlertBannerPNG(text string, width, height int) ([]byte, error) {
+	return labelPNG(text, "Archivo-ExtraBold.ttf", width, height, haAlertRed, haNeutral100)
+}
+
+// WearLabelPNG renders one what-to-wear phrase as a line of text on the
+// scene's flat background, in the weather row's accent color, for the
+// homeassistant scene's row under the weather (device Text slots are
+// all used, so the phrase ships as an Image).
+func WearLabelPNG(text string, width, height int) ([]byte, error) {
+	return labelPNG(text, "Archivo-SemiBold.ttf", width, height, haNeutral900, haTextAccent)
+}
+
+// labelPNG renders text at size 52 centered on a width×height bg fill.
+func labelPNG(text, fontFile string, width, height int, bg, fg color.RGBA) ([]byte, error) {
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
-	draw.Draw(img, img.Bounds(), &image.Uniform{haAlertRed}, image.Point{}, draw.Src)
-	f, err := LoadFont("Archivo-ExtraBold.ttf")
+	draw.Draw(img, img.Bounds(), &image.Uniform{bg}, image.Point{}, draw.Src)
+	f, err := LoadFont(fontFile)
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +160,7 @@ func AlertBannerPNG(text string, width, height int) ([]byte, error) {
 	defer face.Close()
 	m := face.Metrics()
 	baseline := height/2 + (m.Ascent-m.Descent).Round()/2
-	drawLabelCentered(img, text, face, width/2, baseline, haNeutral100)
+	drawLabelCentered(img, text, face, width/2, baseline, fg)
 	return encodeImage(img, FormatPNG)
 }
 
