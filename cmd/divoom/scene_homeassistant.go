@@ -77,12 +77,11 @@ func homeAssistantScene(widgets map[string]widget.Widget) *scene.Scene {
 		})
 	}
 
-	// Last in the list so it layers over the header row it covers.
 	// Parked off-canvas; OnActivate brings it on-screen only while Home
 	// Assistant is down.
 	elements = append(elements, frame.DispElement{
 		ID: idSceneHABanner, Type: "Image",
-		StartX: -CanvasW, StartY: 0,
+		StartX: -CanvasW, StartY: haBannerY,
 		Width: CanvasW, Height: haBannerHeight,
 		Url: haBannerPath, ImgLocalFlag: 1,
 		FontSize: 1, FontID: fontArchivoSemiBold,
@@ -159,9 +158,13 @@ const (
 	haWeatherIconGap  = 14
 )
 
-// haBannerHeight covers the header row, stopping just above the first
-// divider rule (render's haDivider1Y = 122).
-const haBannerHeight = 120
+// The HA-down banner sits in the otherwise-empty space below the last
+// room row (which ends at haRoomY[2]+haRowHeight = 1005), so showing it
+// doesn't cover or move anything.
+const (
+	haBannerY      = 1085
+	haBannerHeight = 120
+)
 
 // On-device paths for the pre-pushed occupancy-mark, weather-icon and
 // HA-down banner PNGs (see render.OccupancyMarkPNG, render.WeatherIconPNG,
