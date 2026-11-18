@@ -126,7 +126,7 @@ After changing the Go list, redeploy and run `divoom push`.
 
 ## Deploy
 
-Runs on the `divoom` LXC (Proxmox CT 103, 10.0.0.235) with the frame
+Runs on the `divoom` LXC (Proxmox CT 103, 10.0.0.150) with the frame
 USB-attached, from a checkout at `/opt/divoom`:
 
 ```
