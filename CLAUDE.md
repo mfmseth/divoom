@@ -280,7 +280,7 @@ Facts about *this* deployment, so a fresh session doesn't have to rediscover
 them. The user-facing details are in README.md — keep both in sync when a
 change touches layout, HA entities, env vars or deploy steps.
 
-- **Where it runs:** LXC 103 on Proxmox host `pve` (10.0.0.150), checkout
+- **Where it runs:** LXC 103 on Proxmox host `pve` (10.0.0.103), checkout
   `/opt/divoom`, container `divoom-dashboard`. Direct root SSH to the LXC is
   refused; use `ssh pve 'pct exec 103 -- sh -c "..."'`. The frame is
   10.0.0.234 (`:9000/divoom_api`), USB-attached to the LXC for adb.
